@@ -1,0 +1,66 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  STATICCHECK_VERSION: "2026.2.2"
+
+jobs:
+  unit:
+    name: vet, staticcheck, unit tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: gofmt
+        run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+      - name: go vet
+        run: |
+          go vet ./...
+          go vet -tags integration ./...
+      - name: staticcheck
+        run: go run honnef.co/go/tools/cmd/staticcheck@${STATICCHECK_VERSION} ./...
+      - name: unit tests
+        run: go test -race ./...
+      # Python packages arrive in Task 6; this step starts running once they exist.
+      - name: pytest
+        if: hashFiles('sdk/python/pyproject.toml') != ''
+        run: |
+          python3 -m pip install -e 'sdk/python[test]'
+          python3 -m pytest sdk/python
+
+  integration:
+    name: integration tests (KVM host)
+    needs: unit
+    # Only on the dedicated self-hosted runner with the `kvm` label.
+    runs-on: [self-hosted, linux, kvm]
+    # Never run code from forked pull requests on the self-hosted runner.
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+    # One KVM host: run one integration job at a time.
+    concurrency:
+      group: kvm-host
+      cancel-in-progress: false
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: build forkbox
+        run: go build -o "$RUNNER_TEMP/forkbox" ./cmd/forkbox
+      - name: forkbox setup
+        run: sudo -n "$RUNNER_TEMP/forkbox" setup
+      - name: forkbox doctor
+        run: sudo -n "$RUNNER_TEMP/forkbox" doctor
+      # Test binaries are built as the runner user and run as root, which the
+      # jailer, cgroups and network namespaces need.
+      - name: integration tests
+        run: go test -tags integration -count=1 -exec 'sudo -n' ./...

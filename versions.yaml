@@ -1,0 +1,48 @@
+# Forkbox pinned versions.
+#
+# Every host component that ends up inside a snapshot is pinned here, with
+# SHA-256 checksums. `forkbox setup` downloads exactly these artifacts and
+# `forkbox doctor` verifies them. Template ids (Task 4) hash this file, so any
+# change here invalidates every template built before it.
+#
+# Only x86_64 is pinned for now (README: Limits, "x86_64 first").
+schema: 1
+
+firecracker:
+  # Firecracker and the jailer ship together in one release archive, so they
+  # are pinned together. snapshot-editor (used by fork in Task 8) is in the
+  # same archive.
+  version: v1.17.0
+  release_url: https://github.com/firecracker-microvm/firecracker/releases/download/v1.17.0
+  artifacts:
+    x86_64:
+      archive: firecracker-v1.17.0-x86_64.tgz
+      # From firecracker-v1.17.0-x86_64.tgz.sha256.txt on the GitHub release.
+      sha256: 06094a1108ae9e82aa4c23a775aa92758f53f1175d422270d9d6162cb9ade558
+      # From SHA256SUMS inside the archive.
+      binaries:
+        firecracker: 99ad0f5cd0514a88aad0e9ae8cfdb3cc3b4ab9d190e1194602406c786b5de7a5
+        jailer: 65ef226e96f0ceda55ba643f445801ef2cc0ea667ef67cad8ac4f406c9c8434f
+        snapshot-editor: f7eb3026802496b03e8591406069497a113a3fe1e3cf1dd79c4d8f5d96078f3f
+
+guest_kernel:
+  # Firecracker v1.17 validates guest kernels 5.10, 6.1 and 6.18
+  # (docs/kernel-policy.md); 6.1's minimum support ended 2026-09-02, so pin
+  # 6.18. It also has the VM generation ID uevent used for clone correctness.
+  version: 6.18.56
+  source: Firecracker CI artifacts, build 20261105-6ea6634994fa-0 (docs/getting-started.md)
+  artifacts:
+    x86_64:
+      url: https://s3.amazonaws.com/spec.ccfc.min/firecracker-ci/20261105-6ea6634994fa-0/x86_64/vmlinux-6.18.56
+      sha256: af348226aa2a25b846156150d5cdb5dae3bf2a022f1db176e3a2b9a3249817bf
+
+base_rootfs:
+  # Minimal guest used by the VM-manager tests and as the fallback base for
+  # templates. `forkbox setup` does not download it; the template builder
+  # (Task 4) does.
+  version: ubuntu-24.04
+  source: Firecracker CI artifacts, build 20261105-6ea6634994fa-0 (docs/getting-started.md)
+  artifacts:
+    x86_64:
+      url: https://s3.amazonaws.com/spec.ccfc.min/firecracker-ci/20261105-6ea6634994fa-0/x86_64/ubuntu-24.04.squashfs
+      sha256: 91da33c2013bd1b018f2c1e6b3d37a3316e0ff8c19a71de640d7a4c3ca31b92b
