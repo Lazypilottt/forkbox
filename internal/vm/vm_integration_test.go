@@ -301,8 +301,9 @@ func assertHostClean(t *testing.T, e *kvmEnv, id string) {
 		if err != nil {
 			continue
 		}
+		// The jailer passes "--id <id>" to Firecracker as two arguments.
 		for _, a := range splitNul(b) {
-			if a == "--id="+id || a == id && strings.Contains(string(b), "jailer") {
+			if a == "--id="+id || a == id {
 				t.Errorf("process %s still running for %s: %q", filepath.Dir(p), id, splitNul(b))
 				break
 			}

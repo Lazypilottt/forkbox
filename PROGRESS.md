@@ -8,10 +8,10 @@
 | 4. Template builder and base snapshot | **Done.** Accepted on a KVM host (CI runs 42204743833, 42205629650). |
 | 5. Create from template, with basic clone correctness | **Done.** Accepted on a KVM host (CI run 42206377901). |
 | 6. Daemon API, Python SDK and the first benchmark | **Done.** Accepted on a KVM host (CI run 42208149355). |
-| v0.1 release review | In progress (see below). |
+| v0.1 release review | **Done.** Tagged `v0.1.0` (`db0fd83`, CI run 42268098451). |
 | 7–17 | Not started. |
 
-**Resume point:** the v0.1 release review, then Task 7. Every push runs the integration tests on real
+**Resume point:** Task 7. Every push runs the integration tests on real
 Firecracker microVMs (see "KVM host" below).
 
 ## KVM host
@@ -696,6 +696,74 @@ mapping the template. These are nested-virtualization numbers on 2 vCPUs.
   token.
 - The gRPC API has no fork or checkpoint yet (Tasks 8 and 9).
 - The `identity` step (32 ms) is the largest part of a create; see Ideas.
+
+---
+
+## v0.1 release review (2026-11-06)
+
+1. **All tests on the KVM host:** green in CI run 42268098451 (Go unit tests
+   with `-race`, pytest, every integration test, templates, the SDK against
+   the daemon, the README quick start, `bench/restore.py`, and the
+   container check).
+2. **Leaks:** `cmd/forkboxd/forkboxd_integration_test.go` runs the real
+   daemon binary:
+   - **Killed mid-create:** SIGKILL at each phase of a create (before
+     anything, record and disk, jail, VM running, agent wait, finished),
+     then a restart. Afterwards there was no `sb-*` process, jail, cgroup,
+     directory or record. The finished sandbox was adopted and answered exec.
+   - **Killed mid-exec:** the restarted daemon adopted the sandbox, the
+     guest killed the orphaned command when its stream went away, and
+     nothing leaked.
+   - **Also checked:** TTL expiry through the daemon.
+
+   **Leak found and fixed (`db0fd83`):** the first chaos run showed a
+   restarted daemon *reaping a live sandbox* instead of adopting it. The
+   liveness check looked for `--id=<id>`, but the jailer runs
+   `/firecracker --id <id> ...` with the id as a separate argument (seen in
+   the test's diagnostic line). The check now uses the process's cgroup
+   (`/forkbox/<id>`), which no unrelated process can be in, with either
+   argv form as a fallback (unit-tested). The same blind spot was in the
+   Task 2 test helper `assertHostClean`; it is fixed too.
+3. **Jailer setup:**
+   - `TestIntegrationBootReachesInit` checks that Firecracker runs as uid and
+     gid 70000 with `Seccomp: 2`, in cgroup `/forkbox/<id>`.
+   - Its root (`/proc/<pid>/root`) is the jail: `api.sock`, `firecracker`,
+     `boot/vmlinux`, `drives/rootfs` and `dev/kvm` are there; the host's
+     `/etc`, `/usr`, `/proc` and `/var` are not.
+   - `TestIntegrationDaemonSocketsAreOwnerOnly` checks that the run
+     directory is 0700 and both sockets are 0600, owned by root, and that a
+     second daemon refuses to start.
+4. **`bench/restore.py` re-run** (`bench/results/restore-20261106T181331Z.md`).
+   CI runners vary in hardware, so both runs are shown:
+
+| run | CPU (2 vCPUs, nested) | create to first exec p50 / p95 (ms) | daemon create p50 (ms) | PSS p50 (MiB) |
+| --- | --- | ---: | ---: | ---: |
+| 2026-11-06 11:15 | Intel Xeon Platinum 8370C | 105.3 / 113.8 | 74.6 | 8.8 |
+| 2026-11-06 18:13 | AMD EPYC 9V45 | 87.2 / 94.8 | 64.0 | 8.6 |
+
+   Full table of the second run (100 runs, up to 10 alive, Firecracker
+   v1.17.0, data dir on XFS):
+
+| metric | p50 | p95 | min | max | mean | stdev |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| create to first exec (ms) | 87.2 | 94.8 | 79.2 | 119.7 | 87.9 | 6.2 |
+| daemon create (ms) | 64.0 | 70.4 | 56.7 | 90.7 | 64.5 | 4.9 |
+|   disk (ms) | 0.6 | 1.2 | 0.4 | 1.6 | 0.8 | 0.3 |
+|   restore (ms) | 15.0 | 17.3 | 9.5 | 18.1 | 13.7 | 2.7 |
+|   resume (ms) | 2.1 | 4.2 | 0.5 | 7.0 | 2.3 | 1.1 |
+|   agent (ms) | 20.3 | 24.1 | 12.4 | 29.4 | 20.4 | 2.9 |
+|   identity (ms) | 25.8 | 31.9 | 19.4 | 51.7 | 26.7 | 4.2 |
+| Firecracker RSS (MiB) | 31.3 | 31.5 | 31.0 | 31.6 | 31.3 | 0.1 |
+| Firecracker PSS (MiB) | 8.6 | 10.5 | 8.5 | 31.1 | 9.1 | 2.6 |
+
+5. **Release:**
+   - The README quick start is current and runs in CI.
+   - Version 0.1.0 is set in the three binaries and the SDK.
+   - `CHANGELOG.md` is written.
+   - The annotated tag `v0.1.0` is on `db0fd83`.
+   - Not built yet (later tasks, not bugs): networking, fork, checkpoints,
+     the clone-correctness suite, MCP, the page server, `race`, warm pools,
+     hardening, metrics.
 
 ---
 
