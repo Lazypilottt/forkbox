@@ -101,6 +101,19 @@ func Run(ctx context.Context, opts Options) (*Installed, error) {
 	return inst, nil
 }
 
+// FetchVerified downloads url to dst unless dst already has the wanted
+// SHA-256. The file only appears at dst once it has verified. A nil client
+// or log means http.DefaultClient and io.Discard.
+func FetchVerified(ctx context.Context, client *http.Client, log io.Writer, url, dst, sha256 string) error {
+	if client == nil {
+		client = http.DefaultClient
+	}
+	if log == nil {
+		log = io.Discard
+	}
+	return fetch(ctx, Options{Client: client, Log: log}, url, dst, sha256)
+}
+
 // fetch downloads url to dst unless dst already has the wanted checksum. The
 // file only appears at dst once it has verified.
 func fetch(ctx context.Context, opts Options, url, dst, want string) error {

@@ -307,3 +307,33 @@ func assertNoPartFiles(t *testing.T, dir string) {
 		return nil
 	})
 }
+
+func TestFetchVerified(t *testing.T) {
+	body := []byte("pinned rootfs")
+	sum := sha256.Sum256(body)
+	want := hex.EncodeToString(sum[:])
+	hits := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		hits++
+		w.Write(body)
+	}))
+	defer srv.Close()
+	dst := filepath.Join(t.TempDir(), "rootfs")
+
+	if err := FetchVerified(context.Background(), nil, nil, srv.URL, dst, want); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := os.ReadFile(dst); string(got) != string(body) {
+		t.Fatalf("dst = %q", got)
+	}
+	if err := FetchVerified(context.Background(), nil, nil, srv.URL, dst, want); err != nil || hits != 1 {
+		t.Fatalf("second fetch: err=%v hits=%d, want no download", err, hits)
+	}
+	other := filepath.Join(t.TempDir(), "x")
+	if err := FetchVerified(context.Background(), nil, nil, srv.URL, other, strings.Repeat("0", 64)); !errors.Is(err, ErrChecksum) {
+		t.Fatalf("bad checksum: got %v", err)
+	}
+	if _, err := os.Stat(other); !os.IsNotExist(err) {
+		t.Fatalf("unverified file was installed")
+	}
+}
