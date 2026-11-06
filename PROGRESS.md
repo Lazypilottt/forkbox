@@ -9,9 +9,10 @@
 | 5. Create from template, with basic clone correctness | **Done.** Accepted on a KVM host (CI run 42206377901). |
 | 6. Daemon API, Python SDK and the first benchmark | **Done.** Accepted on a KVM host (CI run 42208149355). |
 | v0.1 release review | **Done.** Tagged `v0.1.0` (`db0fd83`, CI run 42268098451). |
-| 7–17 | Not started. |
+| 7. Network manager | **Done.** Accepted on a KVM host (CI run 42269235088). |
+| 8–17 | Not started. |
 
-**Resume point:** Task 7. Every push runs the integration tests on real
+**Resume point:** Task 8. Every push runs the integration tests on real
 Firecracker microVMs (see "KVM host" below).
 
 ## KVM host
@@ -767,6 +768,107 @@ mapping the template. These are nested-virtualization numbers on 2 vCPUs.
 
 ---
 
+## Task 7. Network manager (2026-11-06)
+
+### Docs
+
+- **`network-for-clones.md`:** clones keep the guest IP, MAC and tap name from
+  the snapshot. So each clone gets its own network namespace holding a tap
+  with the same name, plus a veth pair to the host, and NAT gives each clone
+  a unique source address.
+- **Neighbour cache:** the guest's cache can be stale after a restore. Here
+  every tap has the same fixed MAC, so it stays valid.
+
+### What was built
+
+- **`internal/netns`:**
+  - **Per sandbox:** a namespace `fbx-<id>` with:
+    - `fbx-tap0` at 172.30.0.1/30, MAC 06:00:ac:1e:00:01, owned by the jail
+      uid so the unprivileged Firecracker can open it;
+    - the veth `fbx-veth`, peered with `fbx-h<slot>` on the host, with a
+      unique /30 from the pool (default 10.200.0.0/16, 16384 slots; slots in
+      SQLite);
+    - a default route through the host end;
+    - IPv4 forwarding on inside the namespace.
+  - **The namespace's nftables ruleset**, applied atomically with `nft -f`:
+    - the guest's DNS to 172.30.0.1 is DNATed to the host's upstream resolver
+      (from `/run/systemd/resolve/resolv.conf`, else `/etc/resolv.conf`,
+      else 1.1.1.1);
+    - TCP from the host to the namespace address is DNATed to the guest (for
+      port forwards);
+    - the guest's traffic is masqueraded to the namespace's unique address;
+    - forwarding policy is drop: it allows established traffic, DNS,
+      TCP 80/443 and ping, and never 169.254.0.0/16 (cloud metadata) or the
+      pool (other sandboxes).
+  - **The host's own `ip fbx` table:** masquerades the pool out of the uplink
+    and drops traffic between `fbx-h*` links. It is the only host table
+    Forkbox touches.
+  - **Shelling out to `ip` and `nft`** (which doctor already requires): each
+    ruleset is atomic, and the code stays free of two large netlink and
+    nftables libraries. The cost is measured below.
+  - **Idempotent:** Setup first removes leftovers; Teardown of a missing
+    namespace is fine. Deleting the namespace removes the veth pair.
+- **Templates bake the network in:**
+  - the build VM runs in a tap-only namespace with `eth0` attached;
+  - the agent, as init, configures `eth0` (172.30.0.2/30, default route via
+    172.30.0.1) over rtnetlink, since slim images have no `ip`;
+  - `/etc/resolv.conf` is `nameserver 172.30.0.1`.
+
+  The template id now includes a builder format version (2), so templates
+  from before networking are rebuilt.
+- **Sandboxes:**
+  - **Create:** allocate a slot, set up the namespace, restore with
+    `--netns`.
+  - **Destroy:** tears the namespace down; the slot is freed with the record.
+  - **Recover:** also removes `fbx-sb-*` namespaces that have no record.
+- **Port forwards:**
+  - `Manager.Expose`, the `ExposePort` RPC, `POST /v1/sandboxes/{id}/ports`
+    and `sb.expose(port)`.
+  - The daemon listens on `--expose-addr` (default 127.0.0.1) and proxies
+    each connection to the namespace address. A userspace proxy works for
+    `127.0.0.1` without the `route_localnet` host sysctl.
+  - Forwards are recorded in SQLite, re-created for adopted sandboxes, and
+    end with the sandbox.
+- **Doctor:** the new `ip-forward` check. Forkbox never changes host network
+  settings; `EnsureHost` fails with the fix if forwarding is off.
+
+### Host setup (operator)
+
+- **IPv4 forwarding:** `net.ipv4.ip_forward=1`.
+- **On hosts with Docker** (whose FORWARD policy is drop), accept the pool in
+  `DOCKER-USER`:
+
+```sh
+sudo iptables -I DOCKER-USER -s 10.200.0.0/16 -j ACCEPT
+sudo iptables -I DOCKER-USER -d 10.200.0.0/16 -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+```
+
+CI does this in its "host forwarding for sandboxes" step.
+
+### Results on the KVM host (`TestIntegrationNetworkTwenty`)
+
+- **Internet access:** 20 sandboxes from the python template all fetched
+  `https://example.com/` (HTTP 200).
+- **Unique sources:** a `tcpdump -i any` on the host saw 20 distinct source
+  addresses, 10.200.0.2, .6, .10 … .78, one per sandbox.
+- **Port forward:** a guest `python -m http.server 8000` was served on
+  `127.0.0.1:38843` on the host.
+- **Blocked egress:** port 25 and 169.254.169.254 were unreachable.
+- **Teardown:** destroying all 20 left no `fbx-` namespaces or links, and
+  `nft list table ip fbx` was unchanged.
+- **Cost:** the network step takes about 35 ms of a create (about 14 `ip` and
+  `nft` commands). Create p50 in `TestIntegrationCreateTwenty` went from 75 ms
+  to 114 ms, and `bench/restore.py` showed 148 ms p50 and 232 ms p95 on this
+  runner. See Ideas.
+
+### Limitations
+
+- IPv4 only.
+- Egress is a fixed allow-list until Task 14.
+- One uplink interface per sandbox.
+
+---
+
 ## Blocked
 
 Nothing.
@@ -788,6 +890,7 @@ Nothing.
 - `forkbox doctor --json`.
 - Mirror the pinned kernel and rootfs to a Forkbox release.
 - Pin aarch64 artifacts.
+- Set up namespaces over netlink (one process, no fork/exec per step) to take the ~35 ms network step down; or keep a pool of ready namespaces.
 - Speed up the post-restore identity step (32 ms): one round trip, and the machine-id written in the background.
 - Registry auth for private base images; debootstrap bases.
 - Detached Exec (survives disconnects; output to a log file) and stdin/TTY support.
