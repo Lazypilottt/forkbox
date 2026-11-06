@@ -38,7 +38,7 @@ func sh(t *testing.T, m *Manager, id, cmd string) string {
 
 func counter(t *testing.T, m *Manager, id string) int {
 	t.Helper()
-	n, err := strconv.Atoi(sh(t, m, id, "cat /tmp/counter"))
+	n, err := strconv.Atoi(sh(t, m, id, "cat /tmp/counter 2>/dev/null || echo 0"))
 	if err != nil {
 		t.Fatalf("%s: counter: %v", id, err)
 	}
