@@ -1114,6 +1114,118 @@ func (*DestroySandboxResponse) Descriptor() ([]byte, []int) {
 	return file_forkbox_proto_rawDescGZIP(), []int{16}
 }
 
+type ExposePortRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SandboxId     string                 `protobuf:"bytes,1,opt,name=sandbox_id,json=sandboxId,proto3" json:"sandbox_id,omitempty"`
+	GuestPort     uint32                 `protobuf:"varint,2,opt,name=guest_port,json=guestPort,proto3" json:"guest_port,omitempty"`
+	HostPort      uint32                 `protobuf:"varint,3,opt,name=host_port,json=hostPort,proto3" json:"host_port,omitempty"` // 0: any free port
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ExposePortRequest) Reset() {
+	*x = ExposePortRequest{}
+	mi := &file_forkbox_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ExposePortRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ExposePortRequest) ProtoMessage() {}
+
+func (x *ExposePortRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_forkbox_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ExposePortRequest.ProtoReflect.Descriptor instead.
+func (*ExposePortRequest) Descriptor() ([]byte, []int) {
+	return file_forkbox_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *ExposePortRequest) GetSandboxId() string {
+	if x != nil {
+		return x.SandboxId
+	}
+	return ""
+}
+
+func (x *ExposePortRequest) GetGuestPort() uint32 {
+	if x != nil {
+		return x.GuestPort
+	}
+	return 0
+}
+
+func (x *ExposePortRequest) GetHostPort() uint32 {
+	if x != nil {
+		return x.HostPort
+	}
+	return 0
+}
+
+type ExposePortResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Host          string                 `protobuf:"bytes,1,opt,name=host,proto3" json:"host,omitempty"` // address the forward listens on
+	HostPort      uint32                 `protobuf:"varint,2,opt,name=host_port,json=hostPort,proto3" json:"host_port,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ExposePortResponse) Reset() {
+	*x = ExposePortResponse{}
+	mi := &file_forkbox_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ExposePortResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ExposePortResponse) ProtoMessage() {}
+
+func (x *ExposePortResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_forkbox_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ExposePortResponse.ProtoReflect.Descriptor instead.
+func (*ExposePortResponse) Descriptor() ([]byte, []int) {
+	return file_forkbox_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *ExposePortResponse) GetHost() string {
+	if x != nil {
+		return x.Host
+	}
+	return ""
+}
+
+func (x *ExposePortResponse) GetHostPort() uint32 {
+	if x != nil {
+		return x.HostPort
+	}
+	return 0
+}
+
 var File_forkbox_proto protoreflect.FileDescriptor
 
 const file_forkbox_proto_rawDesc = "" +
@@ -1195,7 +1307,16 @@ const file_forkbox_proto_rawDesc = "" +
 	"\x06sha256\x18\x02 \x01(\fR\x06sha256\"'\n" +
 	"\x15DestroySandboxRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\"\x18\n" +
-	"\x16DestroySandboxResponse2\x8a\x04\n" +
+	"\x16DestroySandboxResponse\"n\n" +
+	"\x11ExposePortRequest\x12\x1d\n" +
+	"\n" +
+	"sandbox_id\x18\x01 \x01(\tR\tsandboxId\x12\x1d\n" +
+	"\n" +
+	"guest_port\x18\x02 \x01(\rR\tguestPort\x12\x1b\n" +
+	"\thost_port\x18\x03 \x01(\rR\bhostPort\"E\n" +
+	"\x12ExposePortResponse\x12\x12\n" +
+	"\x04host\x18\x01 \x01(\tR\x04host\x12\x1b\n" +
+	"\thost_port\x18\x02 \x01(\rR\bhostPort2\xd7\x04\n" +
 	"\aForkbox\x12F\n" +
 	"\rCreateSandbox\x12 .forkbox.v1.CreateSandboxRequest\x1a\x13.forkbox.v1.Sandbox\x12@\n" +
 	"\n" +
@@ -1204,7 +1325,9 @@ const file_forkbox_proto_rawDesc = "" +
 	"\x04Exec\x12\x17.forkbox.v1.ExecRequest\x1a\x15.forkbox.v1.ExecEvent0\x01\x12@\n" +
 	"\bReadFile\x12\x1b.forkbox.v1.ReadFileRequest\x1a\x15.forkbox.v1.FileChunk0\x01\x12J\n" +
 	"\tWriteFile\x12\x1c.forkbox.v1.WriteFileRequest\x1a\x1d.forkbox.v1.WriteFileResponse(\x01\x12W\n" +
-	"\x0eDestroySandbox\x12!.forkbox.v1.DestroySandboxRequest\x1a\".forkbox.v1.DestroySandboxResponseB0Z.github.com/Lazypilottt/forkbox/proto/forkboxpbb\x06proto3"
+	"\x0eDestroySandbox\x12!.forkbox.v1.DestroySandboxRequest\x1a\".forkbox.v1.DestroySandboxResponse\x12K\n" +
+	"\n" +
+	"ExposePort\x12\x1d.forkbox.v1.ExposePortRequest\x1a\x1e.forkbox.v1.ExposePortResponseB0Z.github.com/Lazypilottt/forkbox/proto/forkboxpbb\x06proto3"
 
 var (
 	file_forkbox_proto_rawDescOnce sync.Once
@@ -1218,7 +1341,7 @@ func file_forkbox_proto_rawDescGZIP() []byte {
 	return file_forkbox_proto_rawDescData
 }
 
-var file_forkbox_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
+var file_forkbox_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
 var file_forkbox_proto_goTypes = []any{
 	(*Sandbox)(nil),                // 0: forkbox.v1.Sandbox
 	(*CreateTimings)(nil),          // 1: forkbox.v1.CreateTimings
@@ -1237,6 +1360,8 @@ var file_forkbox_proto_goTypes = []any{
 	(*WriteFileResponse)(nil),      // 14: forkbox.v1.WriteFileResponse
 	(*DestroySandboxRequest)(nil),  // 15: forkbox.v1.DestroySandboxRequest
 	(*DestroySandboxResponse)(nil), // 16: forkbox.v1.DestroySandboxResponse
+	(*ExposePortRequest)(nil),      // 17: forkbox.v1.ExposePortRequest
+	(*ExposePortResponse)(nil),     // 18: forkbox.v1.ExposePortResponse
 }
 var file_forkbox_proto_depIdxs = []int32{
 	1,  // 0: forkbox.v1.Sandbox.timings:type_name -> forkbox.v1.CreateTimings
@@ -1251,15 +1376,17 @@ var file_forkbox_proto_depIdxs = []int32{
 	10, // 9: forkbox.v1.Forkbox.ReadFile:input_type -> forkbox.v1.ReadFileRequest
 	13, // 10: forkbox.v1.Forkbox.WriteFile:input_type -> forkbox.v1.WriteFileRequest
 	15, // 11: forkbox.v1.Forkbox.DestroySandbox:input_type -> forkbox.v1.DestroySandboxRequest
-	0,  // 12: forkbox.v1.Forkbox.CreateSandbox:output_type -> forkbox.v1.Sandbox
-	0,  // 13: forkbox.v1.Forkbox.GetSandbox:output_type -> forkbox.v1.Sandbox
-	5,  // 14: forkbox.v1.Forkbox.ListSandboxes:output_type -> forkbox.v1.ListSandboxesResponse
-	7,  // 15: forkbox.v1.Forkbox.Exec:output_type -> forkbox.v1.ExecEvent
-	11, // 16: forkbox.v1.Forkbox.ReadFile:output_type -> forkbox.v1.FileChunk
-	14, // 17: forkbox.v1.Forkbox.WriteFile:output_type -> forkbox.v1.WriteFileResponse
-	16, // 18: forkbox.v1.Forkbox.DestroySandbox:output_type -> forkbox.v1.DestroySandboxResponse
-	12, // [12:19] is the sub-list for method output_type
-	5,  // [5:12] is the sub-list for method input_type
+	17, // 12: forkbox.v1.Forkbox.ExposePort:input_type -> forkbox.v1.ExposePortRequest
+	0,  // 13: forkbox.v1.Forkbox.CreateSandbox:output_type -> forkbox.v1.Sandbox
+	0,  // 14: forkbox.v1.Forkbox.GetSandbox:output_type -> forkbox.v1.Sandbox
+	5,  // 15: forkbox.v1.Forkbox.ListSandboxes:output_type -> forkbox.v1.ListSandboxesResponse
+	7,  // 16: forkbox.v1.Forkbox.Exec:output_type -> forkbox.v1.ExecEvent
+	11, // 17: forkbox.v1.Forkbox.ReadFile:output_type -> forkbox.v1.FileChunk
+	14, // 18: forkbox.v1.Forkbox.WriteFile:output_type -> forkbox.v1.WriteFileResponse
+	16, // 19: forkbox.v1.Forkbox.DestroySandbox:output_type -> forkbox.v1.DestroySandboxResponse
+	18, // 20: forkbox.v1.Forkbox.ExposePort:output_type -> forkbox.v1.ExposePortResponse
+	13, // [13:21] is the sub-list for method output_type
+	5,  // [5:13] is the sub-list for method input_type
 	5,  // [5:5] is the sub-list for extension type_name
 	5,  // [5:5] is the sub-list for extension extendee
 	0,  // [0:5] is the sub-list for field type_name
@@ -1286,7 +1413,7 @@ func file_forkbox_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_forkbox_proto_rawDesc), len(file_forkbox_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   17,
+			NumMessages:   19,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

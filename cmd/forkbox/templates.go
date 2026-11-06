@@ -15,6 +15,7 @@ import (
 
 	forkbox "github.com/Lazypilottt/forkbox"
 	"github.com/Lazypilottt/forkbox/internal/datadir"
+	"github.com/Lazypilottt/forkbox/internal/netns"
 	"github.com/Lazypilottt/forkbox/internal/template"
 	"github.com/Lazypilottt/forkbox/internal/versions"
 	"github.com/Lazypilottt/forkbox/internal/vm"
@@ -150,9 +151,14 @@ func newBuilder(c commonFlags, agentPath string, log io.Writer) (*template.Build
 	if err != nil {
 		return nil, err
 	}
+	nm, err := netns.New("", vm.DefaultUID, vm.DefaultGID)
+	if err != nil {
+		return nil, err
+	}
 	return &template.Builder{
 		DataDir:      c.dataDir,
 		Manager:      m,
+		Net:          nm,
 		Kernel:       datadir.Kernel(c.dataDir, v.GuestKernel.Version),
 		KernelVer:    v.GuestKernel.Version,
 		FCVersion:    v.Firecracker.Version,

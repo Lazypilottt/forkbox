@@ -129,6 +129,16 @@ func (b *fakeBackend) Destroy(ctx context.Context, id string) error {
 	return nil
 }
 
+func (b *fakeBackend) Expose(ctx context.Context, id string, guest, host int) (int, error) {
+	if _, err := b.Get(ctx, id); err != nil {
+		return 0, err
+	}
+	if host == 0 {
+		host = 40000 + guest
+	}
+	return host, nil
+}
+
 func (b *fakeBackend) Agent(id string) *agentclient.Client {
 	b.mu.Lock()
 	sock := b.recs[id].Vsock
@@ -185,6 +195,15 @@ func TestSandboxCRUD(t *testing.T) {
 	list, err := c.ListSandboxes(ctx, &pb.ListSandboxesRequest{})
 	if err != nil || len(list.Sandboxes) != 1 {
 		t.Errorf("list %v %v", list, err)
+	}
+	if ep, err := c.ExposePort(ctx, &pb.ExposePortRequest{SandboxId: "sb-1", GuestPort: 8000}); err != nil || ep.HostPort != 48000 {
+		t.Errorf("expose: %v %v", ep, err)
+	}
+	if _, err := c.ExposePort(ctx, &pb.ExposePortRequest{SandboxId: "sb-1", GuestPort: 70000}); code(err) != codes.InvalidArgument {
+		t.Errorf("bad port: %v", err)
+	}
+	if _, err := c.ExposePort(ctx, &pb.ExposePortRequest{SandboxId: "sb-9", GuestPort: 80}); code(err) != codes.NotFound {
+		t.Errorf("expose on a missing sandbox: %v", err)
 	}
 	if _, err := c.DestroySandbox(ctx, &pb.DestroySandboxRequest{Id: "sb-1"}); err != nil {
 		t.Fatal(err)

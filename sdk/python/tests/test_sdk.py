@@ -130,6 +130,14 @@ def test_files(daemon, tmp_path):
             sb.fs.write("relative/path", b"x")
 
 
+def test_expose(daemon):
+    with Sandbox.create() as sb:
+        assert sb.expose(8000) == ("127.0.0.1", 48000)
+        assert sb.expose(8000, host_port=18080) == ("127.0.0.1", 18080)
+        with pytest.raises(InvalidArgumentError):
+            sb.expose(0)
+
+
 def test_not_running(daemon):
     sb = Sandbox.create()
     daemon.sandboxes[sb.id].state = "creating"

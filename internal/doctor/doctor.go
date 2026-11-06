@@ -56,6 +56,7 @@ func Checks() []Check {
 		{"jailer", binaryCheck("jailer", "Jailer")},
 		{"nftables", toolCheck("nft", []string{"--version"}, "nftables", "nftables")},
 		{"iproute2", toolCheck("ip", []string{"-V"}, "iproute2", "iproute2")},
+		{"ip-forward", checkIPForward},
 	}
 }
 

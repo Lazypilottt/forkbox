@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/Lazypilottt/forkbox/internal/datadir"
+	"github.com/Lazypilottt/forkbox/internal/netns"
 	"github.com/Lazypilottt/forkbox/internal/store"
 	"github.com/Lazypilottt/forkbox/internal/template"
 	"github.com/Lazypilottt/forkbox/internal/testutil"
@@ -47,7 +48,14 @@ func newTestManager(t *testing.T) *Manager {
 	if _, err := template.Get(data, "python"); err != nil {
 		t.Fatalf("%v: build it first with `sudo forkbox templates build templates/python.yaml`", err)
 	}
-	return New(data, vms, st)
+	nm, err := netns.New("", vm.DefaultUID, vm.DefaultGID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := nm.EnsureHost(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	return New(data, vms, st, nm)
 }
 
 func TestIntegrationCreateTwenty(t *testing.T) {

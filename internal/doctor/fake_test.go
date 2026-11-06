@@ -145,6 +145,7 @@ func healthy(t *testing.T) *fakeEnv {
 			"/proc/cpuinfo":                     "vendor_id\t: GenuineIntel\nflags\t\t: fpu vme vmx sse\n",
 			"/proc/misc":                        "126 userfaultfd\n232 kvm\n",
 			uffdSysctl:                          "0\n",
+			ipForwardSysctl:                     "1\n",
 		},
 		nodes: map[string]fs.FileMode{
 			kvmDevice:   charDev,

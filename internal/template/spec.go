@@ -162,6 +162,10 @@ func (s *Spec) EnvList() []string {
 	return out
 }
 
+// FormatVersion changes when the builder makes different images from the
+// same inputs (2: guest network baked in), so old templates are rebuilt.
+const FormatVersion = 2
+
 // ID computes the template id: a hash of everything that determines what is
 // built. That is the spec (with copied files by content, not by path),
 // versions.yaml (Firecracker, kernel) and the agent binary that goes into
@@ -173,11 +177,12 @@ func ID(s *Spec, specDir string, versionsYAML, agentBinary []byte) (string, erro
 		Mode   string `json:"mode"`
 	}
 	canon := struct {
+		Format  int         `json:"format"`
 		Spec    Spec        `json:"spec"`
 		Files   []fileEntry `json:"files"`
 		Version string      `json:"versions_sha256"`
 		Agent   string      `json:"agent_sha256"`
-	}{Spec: *s}
+	}{Format: FormatVersion, Spec: *s}
 	canon.Spec.Files = nil
 	canon.Spec.Env = nil
 	for _, f := range s.Files {

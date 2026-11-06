@@ -32,6 +32,7 @@ type Backend interface {
 	List(ctx context.Context) ([]*store.Sandbox, error)
 	Destroy(ctx context.Context, id string) error
 	Agent(id string) *agentclient.Client
+	Expose(ctx context.Context, id string, guestPort, hostPort int) (int, error)
 }
 
 // Server implements the Forkbox gRPC service.
@@ -41,6 +42,8 @@ type Server struct {
 	// AgentTimeout bounds unary agent calls (default 30 s). Exec and file
 	// streams are bounded by the caller's context instead.
 	AgentTimeout time.Duration
+	// ExposeHost is reported with port forwards (where they listen).
+	ExposeHost string
 }
 
 var _ pb.ForkboxServer = (*Server)(nil)
@@ -87,6 +90,17 @@ func (s *Server) DestroySandbox(ctx context.Context, r *pb.DestroySandboxRequest
 		return nil, toStatus(err)
 	}
 	return &pb.DestroySandboxResponse{}, nil
+}
+
+func (s *Server) ExposePort(ctx context.Context, r *pb.ExposePortRequest) (*pb.ExposePortResponse, error) {
+	if r.GuestPort == 0 || r.GuestPort > 65535 || r.HostPort > 65535 {
+		return nil, status.Error(codes.InvalidArgument, "ports must be 1-65535 (host_port 0 picks one)")
+	}
+	port, err := s.B.Expose(ctx, r.SandboxId, int(r.GuestPort), int(r.HostPort))
+	if err != nil {
+		return nil, toStatus(err)
+	}
+	return &pb.ExposePortResponse{Host: s.ExposeHost, HostPort: uint32(port)}, nil
 }
 
 // running returns the agent of a running sandbox.
@@ -244,6 +258,8 @@ func toStatus(err error) error {
 		code = codes.NotFound
 	case errors.Is(err, store.ErrExists):
 		code = codes.AlreadyExists
+	case errors.Is(err, store.ErrNoSlot):
+		code = codes.ResourceExhausted
 	case errors.Is(err, fs.ErrInvalid), errors.Is(err, vm.ErrConfig), errors.Is(err, template.ErrSpec):
 		code = codes.InvalidArgument
 	case errors.Is(err, fs.ErrPermission):

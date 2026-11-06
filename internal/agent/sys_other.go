@@ -31,6 +31,9 @@ func ListenVsock(port uint32) (net.Listener, error) {
 	return nil, errors.New("vsock: the guest agent only runs on Linux")
 }
 
+// ConfigureNet is Linux-only.
+func ConfigureNet(*GuestNet) error { return errors.New("guest networking is Linux-only") }
+
 // RunInit is Linux-only.
 func RunInit(logger *log.Logger, serveArgs []string) {
 	logger.Fatal("init mode only runs in a Linux guest")

@@ -119,6 +119,12 @@ class FakeForkbox(pbg.ForkboxServicer):
         yield pb.ExecEvent(exit=pb.ExecExit(exit_code=rc, signal=sig, timed_out=timed_out,
                                             duration_ms=(time.monotonic() - start) * 1000))
 
+    def ExposePort(self, request, context):
+        self._get(request.sandbox_id, context)
+        if not 0 < request.guest_port < 65536:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, "ports must be 1-65535")
+        return pb.ExposePortResponse(host="127.0.0.1", host_port=request.host_port or 40000 + request.guest_port)
+
     def ReadFile(self, request, context):
         self._get(request.sandbox_id, context)
         data = self.files.get((request.sandbox_id, request.path))

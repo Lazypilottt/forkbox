@@ -13,6 +13,7 @@ import (
 	forkbox "github.com/Lazypilottt/forkbox"
 	"github.com/Lazypilottt/forkbox/internal/agentwire"
 	"github.com/Lazypilottt/forkbox/internal/datadir"
+	"github.com/Lazypilottt/forkbox/internal/netns"
 	"github.com/Lazypilottt/forkbox/internal/storage"
 	"github.com/Lazypilottt/forkbox/internal/testutil"
 	"github.com/Lazypilottt/forkbox/internal/versions"
@@ -30,8 +31,10 @@ func TestIntegrationBuildTiny(t *testing.T) {
 	data := datadir.FromEnv()
 	m, err := vm.NewManager(vm.Options{DataDir: data, FirecrackerVersion: v.Firecracker.Version})
 	must(t, err)
+	nm, err := netns.New("", vm.DefaultUID, vm.DefaultGID)
+	must(t, err)
 	b := &Builder{
-		DataDir: data, Manager: m,
+		DataDir: data, Manager: m, Net: nm,
 		Kernel: datadir.Kernel(data, v.GuestKernel.Version), KernelVer: v.GuestKernel.Version,
 		FCVersion: v.Firecracker.Version, VersionsYAML: forkbox.VersionsYAML,
 		AgentBinary: "../../bin/forkbox-agent", GOARCH: runtime.GOARCH, Log: testWriter{t},
@@ -77,7 +80,12 @@ func TestIntegrationBuildTiny(t *testing.T) {
 	os.Remove(disk)
 	must(t, storage.Reflink(tpl.Rootfs(), disk))
 	t.Cleanup(func() { os.Remove(disk) })
-	sb, err := m.Restore(ctx, tpl.SnapshotDir(), vm.MemBackend{Kind: vm.MemFile}, vm.Config{Rootfs: vm.Drive{Path: disk}})
+	// The snapshot has the guest's network device, so the restored VM needs
+	// a namespace with the tap (no uplink is needed here).
+	must(t, nm.Setup(ctx, "tiny-restore", -1))
+	t.Cleanup(func() { nm.Teardown(context.Background(), "tiny-restore") })
+	sb, err := m.Restore(ctx, tpl.SnapshotDir(), vm.MemBackend{Kind: vm.MemFile},
+		vm.Config{ID: "tiny-restore", Rootfs: vm.Drive{Path: disk}, NetNS: netns.Path("tiny-restore")})
 	must(t, err)
 	t.Cleanup(func() { sb.Stop() })
 	must(t, sb.Resume(ctx))
@@ -87,9 +95,9 @@ func TestIntegrationBuildTiny(t *testing.T) {
 	if _, err := c.WaitReady(rctx); err != nil {
 		t.Fatalf("agent after restore: %v", err)
 	}
-	r, err := c.Run(ctx, agentclient.ExecRequest{Args: []string{"sh", "-c", `cat /etc/motd; echo "$FORKBOX_TEST"; hostname; cat /proc/1/comm`}}, 0)
+	r, err := c.Run(ctx, agentclient.ExecRequest{Args: []string{"sh", "-c", `cat /etc/motd; echo "$FORKBOX_TEST"; hostname; cat /proc/1/comm; cat /etc/resolv.conf; cat /sys/class/net/eth0/address`}}, 0)
 	must(t, err)
-	if want := "built by forkbox\n1\ntiny\nforkbox-agent\n"; string(r.Stdout) != want {
+	if want := "built by forkbox\n1\ntiny\nforkbox-agent\nnameserver 172.30.0.1\n06:00:ac:1e:00:02\n"; string(r.Stdout) != want {
 		t.Errorf("restored guest says %q, want %q (stderr %q)", r.Stdout, want, r.Stderr)
 	}
 	must(t, sb.Stop())

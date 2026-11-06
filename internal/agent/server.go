@@ -58,8 +58,16 @@ const GuestConfigPath = "/etc/forkbox/agent.json"
 
 // GuestConfig is the content of GuestConfigPath.
 type GuestConfig struct {
-	Env []string `json:"env"` // KEY=value, over the agent's defaults
-	Cwd string   `json:"cwd"` // default working directory
+	Env []string  `json:"env"` // KEY=value, over the agent's defaults
+	Cwd string    `json:"cwd"` // default working directory
+	Net *GuestNet `json:"net,omitempty"`
+}
+
+// GuestNet is the guest's network, set up by the agent in init mode.
+type GuestNet struct {
+	Iface   string `json:"iface"`   // e.g. eth0
+	Addr    string `json:"addr"`    // CIDR, e.g. 172.30.0.2/30
+	Gateway string `json:"gateway"` // also the DNS server
 }
 
 // LoadGuestConfig reads path. A missing file is an empty config.

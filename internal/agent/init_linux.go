@@ -47,6 +47,13 @@ func RunInit(logger *log.Logger, serveArgs []string) {
 	if err := linkUp("lo"); err != nil {
 		logger.Printf("init: loopback: %v", err)
 	}
+	if gc, err := LoadGuestConfig(GuestConfigPath); err == nil && gc.Net != nil {
+		if err := ConfigureNet(gc.Net); err != nil {
+			logger.Printf("init: network: %v", err)
+		} else {
+			logger.Printf("init: %s %s via %s", gc.Net.Iface, gc.Net.Addr, gc.Net.Gateway)
+		}
+	}
 
 	sigs := make(chan os.Signal, 16)
 	signal.Notify(sigs, syscall.SIGCHLD, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)

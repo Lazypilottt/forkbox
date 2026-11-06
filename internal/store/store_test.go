@@ -111,3 +111,63 @@ func TestRefusesNewerSchema(t *testing.T) {
 		t.Error("opened a database from a newer version")
 	}
 }
+
+func TestNetSlots(t *testing.T) {
+	s, _ := open(t)
+	ctx := context.Background()
+	for _, id := range []string{"a", "b", "c", "d"} {
+		s.InsertSandbox(ctx, &Sandbox{ID: id, Template: "t", State: StateRunning})
+	}
+	got := map[string]int{}
+	for _, id := range []string{"a", "b", "c"} {
+		slot, err := s.AllocSlot(ctx, id, 3)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got[id] = slot
+	}
+	if got["a"] != 0 || got["b"] != 1 || got["c"] != 2 {
+		t.Errorf("slots %v", got)
+	}
+	if again, _ := s.AllocSlot(ctx, "b", 3); again != 1 {
+		t.Errorf("re-alloc gave %d", again)
+	}
+	if _, err := s.AllocSlot(ctx, "d", 3); !errors.Is(err, ErrNoSlot) {
+		t.Errorf("exhausted pool: %v", err)
+	}
+	// Freed slots are reused, lowest first; deleting a sandbox frees its slot.
+	s.FreeSlot(ctx, "b")
+	if slot, _ := s.AllocSlot(ctx, "d", 3); slot != 1 {
+		t.Errorf("reuse gave %d", slot)
+	}
+	s.DeleteSandbox(ctx, "a")
+	if _, err := s.Slot(ctx, "a"); !errors.Is(err, ErrNotFound) {
+		t.Errorf("slot survived its sandbox: %v", err)
+	}
+	if slot, err := s.Slot(ctx, "d"); err != nil || slot != 1 {
+		t.Errorf("slot of d: %d %v", slot, err)
+	}
+}
+
+func TestPortForwards(t *testing.T) {
+	s, _ := open(t)
+	ctx := context.Background()
+	s.InsertSandbox(ctx, &Sandbox{ID: "a", Template: "t", State: StateRunning})
+	s.InsertSandbox(ctx, &Sandbox{ID: "b", Template: "t", State: StateRunning})
+	if err := s.AddPortForward(ctx, PortForward{"a", 8000, 18000}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.AddPortForward(ctx, PortForward{"b", 9000, 18000}); !errors.Is(err, ErrExists) {
+		t.Errorf("host port reused: %v", err)
+	}
+	s.AddPortForward(ctx, PortForward{"b", 9000, 19000})
+	all, _ := s.PortForwards(ctx, "")
+	mine, _ := s.PortForwards(ctx, "b")
+	if len(all) != 2 || len(mine) != 1 || mine[0].HostPort != 19000 {
+		t.Errorf("all %v mine %v", all, mine)
+	}
+	s.DeleteSandbox(ctx, "a")
+	if all, _ = s.PortForwards(ctx, ""); len(all) != 1 {
+		t.Errorf("forward survived its sandbox: %v", all)
+	}
+}

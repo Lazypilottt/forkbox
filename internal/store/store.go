@@ -39,6 +39,16 @@ var migrations = []string{
 	);
 	CREATE INDEX sandboxes_state ON sandboxes(state);`,
 	`ALTER TABLE sandboxes ADD COLUMN template_name TEXT NOT NULL DEFAULT '';`,
+	`CREATE TABLE net_slots (
+		slot       INTEGER PRIMARY KEY,
+		sandbox_id TEXT NOT NULL UNIQUE REFERENCES sandboxes(id) ON DELETE CASCADE
+	);
+	CREATE TABLE port_forwards (
+		sandbox_id TEXT NOT NULL REFERENCES sandboxes(id) ON DELETE CASCADE,
+		guest_port INTEGER NOT NULL,
+		host_port  INTEGER NOT NULL UNIQUE,
+		PRIMARY KEY (sandbox_id, guest_port)
+	);`,
 }
 
 // Open opens (creating if needed) the database at path and migrates it.
@@ -219,4 +229,93 @@ func mustAffect(res sql.Result, id string) error {
 
 func isConstraint(err error) bool {
 	return err != nil && strings.Contains(strings.ToLower(err.Error()), "constraint")
+}
+
+// ErrNoSlot means the address pool is exhausted.
+var ErrNoSlot = errors.New("no free network slot")
+
+// AllocSlot gives a sandbox the lowest free network slot below max. A
+// sandbox that already has one gets it back.
+func (s *Store) AllocSlot(ctx context.Context, sandboxID string, max int) (int, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+	var slot int
+	err = tx.QueryRowContext(ctx, `SELECT slot FROM net_slots WHERE sandbox_id = ?`, sandboxID).Scan(&slot)
+	if err == nil {
+		return slot, tx.Commit()
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return 0, err
+	}
+	// The first gap in the used slots, or 0 if slot 0 is free.
+	err = tx.QueryRowContext(ctx, `SELECT CASE WHEN NOT EXISTS (SELECT 1 FROM net_slots WHERE slot = 0) THEN 0 ELSE
+		(SELECT MIN(a.slot) + 1 FROM net_slots a WHERE NOT EXISTS (SELECT 1 FROM net_slots b WHERE b.slot = a.slot + 1)) END`).Scan(&slot)
+	if err != nil {
+		return 0, err
+	}
+	if slot >= max {
+		return 0, fmt.Errorf("%w: all %d slots are in use", ErrNoSlot, max)
+	}
+	if _, err := tx.ExecContext(ctx, `INSERT INTO net_slots (slot, sandbox_id) VALUES (?, ?)`, slot, sandboxID); err != nil {
+		return 0, err
+	}
+	return slot, tx.Commit()
+}
+
+// Slot returns a sandbox's network slot, or ErrNotFound.
+func (s *Store) Slot(ctx context.Context, sandboxID string) (int, error) {
+	var slot int
+	err := s.db.QueryRowContext(ctx, `SELECT slot FROM net_slots WHERE sandbox_id = ?`, sandboxID).Scan(&slot)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, fmt.Errorf("%w: no network slot for %s", ErrNotFound, sandboxID)
+	}
+	return slot, err
+}
+
+// FreeSlot releases a sandbox's slot (deleting the sandbox also does).
+func (s *Store) FreeSlot(ctx context.Context, sandboxID string) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM net_slots WHERE sandbox_id = ?`, sandboxID)
+	return err
+}
+
+// PortForward exposes a guest TCP port on a host port.
+type PortForward struct {
+	SandboxID string
+	GuestPort int
+	HostPort  int
+}
+
+// AddPortForward records a forward. A host port can serve one forward.
+func (s *Store) AddPortForward(ctx context.Context, pf PortForward) error {
+	_, err := s.db.ExecContext(ctx, `INSERT INTO port_forwards (sandbox_id, guest_port, host_port) VALUES (?, ?, ?)`,
+		pf.SandboxID, pf.GuestPort, pf.HostPort)
+	if isConstraint(err) {
+		return fmt.Errorf("%w: port forward %d -> %d", ErrExists, pf.HostPort, pf.GuestPort)
+	}
+	return err
+}
+
+// PortForwards lists forwards; an empty id lists all of them.
+func (s *Store) PortForwards(ctx context.Context, sandboxID string) ([]PortForward, error) {
+	q, args := `SELECT sandbox_id, guest_port, host_port FROM port_forwards ORDER BY sandbox_id, guest_port`, []any{}
+	if sandboxID != "" {
+		q, args = `SELECT sandbox_id, guest_port, host_port FROM port_forwards WHERE sandbox_id = ? ORDER BY guest_port`, []any{sandboxID}
+	}
+	rows, err := s.db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []PortForward
+	for rows.Next() {
+		var pf PortForward
+		if err := rows.Scan(&pf.SandboxID, &pf.GuestPort, &pf.HostPort); err != nil {
+			return nil, err
+		}
+		out = append(out, pf)
+	}
+	return out, rows.Err()
 }

@@ -11,12 +11,16 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/Lazypilottt/forkbox/internal/agentwire"
+	"github.com/Lazypilottt/forkbox/internal/netns"
 	"github.com/Lazypilottt/forkbox/internal/storage"
 	"github.com/Lazypilottt/forkbox/internal/store"
 	"github.com/Lazypilottt/forkbox/internal/template"
@@ -32,17 +36,23 @@ type Manager struct {
 	DataDir string
 	VMs     *vm.Manager
 	Store   *store.Store
+	Net     *netns.Manager
+	// ExposeAddr is the host address port forwards listen on (default
+	// 127.0.0.1; set 0.0.0.0 to publish previews).
+	ExposeAddr string
 	// AgentTimeout bounds the wait for the agent after resume (default 30 s).
 	AgentTimeout time.Duration
 	Log          *log.Logger
 
-	mu  sync.Mutex
-	vms map[string]*vm.VM // VMs started by this process
+	mu        sync.Mutex
+	vms       map[string]*vm.VM         // VMs started by this process
+	listeners map[string][]net.Listener // port forwards, by sandbox
 }
 
 // New returns a manager.
-func New(dataDir string, vms *vm.Manager, st *store.Store) *Manager {
-	return &Manager{DataDir: dataDir, VMs: vms, Store: st, Log: log.New(io.Discard, "", 0), vms: map[string]*vm.VM{}}
+func New(dataDir string, vms *vm.Manager, st *store.Store, nm *netns.Manager) *Manager {
+	return &Manager{DataDir: dataDir, VMs: vms, Store: st, Net: nm, ExposeAddr: "127.0.0.1",
+		Log: log.New(io.Discard, "", 0), vms: map[string]*vm.VM{}, listeners: map[string][]net.Listener{}}
 }
 
 // Dir is a sandbox's directory, <data>/sandboxes/<id>.
@@ -57,7 +67,7 @@ type CreateOptions struct {
 
 // Timings of one Create, for benchmarks.
 type Timings struct {
-	Disk, Restore, Resume, Agent, Identity, Total time.Duration
+	Disk, Network, Restore, Resume, Agent, Identity, Total time.Duration
 }
 
 // Created is the result of Create.
@@ -145,10 +155,21 @@ func (m *Manager) create(ctx context.Context, tpl *template.Template, rec *store
 	}
 	c.Timings.Disk = time.Since(t)
 
+	// The namespace's tap has the name, address and MAC the snapshot expects.
+	t = time.Now()
+	slot, err := m.Store.AllocSlot(ctx, rec.ID, m.Net.Slots())
+	if err != nil {
+		return nil, err
+	}
+	if err := m.Net.Setup(ctx, rec.ID, slot); err != nil {
+		return nil, err
+	}
+	c.Timings.Network = time.Since(t)
+
 	t = time.Now()
 	mem := filepath.Join(tpl.SnapshotDir(), vm.SnapshotMemFile)
 	v, err := m.VMs.Restore(ctx, tpl.SnapshotDir(), vm.MemBackend{Kind: vm.MemFile, Path: mem},
-		vm.Config{ID: rec.ID, Rootfs: vm.Drive{Path: disk}})
+		vm.Config{ID: rec.ID, Rootfs: vm.Drive{Path: disk}, NetNS: netns.Path(rec.ID)})
 	if err != nil {
 		return nil, err
 	}
@@ -227,17 +248,24 @@ func (m *Manager) Destroy(ctx context.Context, id string) error {
 	return m.Store.DeleteSandbox(ctx, id)
 }
 
-func (m *Manager) cleanup(_ context.Context, id, dir string) error {
+func (m *Manager) cleanup(ctx context.Context, id, dir string) error {
 	m.mu.Lock()
 	v := m.vms[id]
 	delete(m.vms, id)
+	ls := m.listeners[id]
+	delete(m.listeners, id)
 	m.mu.Unlock()
+	for _, l := range ls {
+		l.Close()
+	}
 	var errs []error
 	if v != nil {
 		errs = append(errs, v.Stop())
 	} else {
 		errs = append(errs, m.VMs.Reap(id))
 	}
+	// After the VM: the namespace (and its veth) goes once nothing uses it.
+	errs = append(errs, m.Net.Teardown(context.WithoutCancel(ctx), id))
 	if err := os.RemoveAll(dir); err != nil {
 		errs = append(errs, err)
 	}
@@ -278,6 +306,9 @@ func (m *Manager) Recover(ctx context.Context) (*RecoverReport, error) {
 		known[r.ID] = true
 		if r.State == store.StateRunning && m.VMs.Alive(r.Pid, r.ID) {
 			rep.Adopted = append(rep.Adopted, r.ID)
+			if err := m.restoreForwards(ctx, r.ID); err != nil {
+				errs = append(errs, fmt.Errorf("port forwards of %s: %w", r.ID, err))
+			}
 			continue
 		}
 		if err := m.cleanup(ctx, r.ID, r.Dir); err != nil {
@@ -299,6 +330,11 @@ func (m *Manager) Recover(ctx context.Context) (*RecoverReport, error) {
 		paths, _ := filepath.Glob(glob)
 		for _, p := range paths {
 			candidates[filepath.Base(p)] = true
+		}
+	}
+	for _, ns := range netns.Namespaces() {
+		if id := strings.TrimPrefix(ns, netns.Prefix); strings.HasPrefix(id, IDPrefix) {
+			candidates[id] = true
 		}
 	}
 	for id := range candidates {
@@ -336,4 +372,99 @@ func (m *Manager) ExpireOnce(ctx context.Context, now time.Time) ([]string, erro
 		}
 	}
 	return done, errors.Join(errs...)
+}
+
+// Expose forwards a host TCP port to a guest port, for previews. hostPort
+// 0 picks a free one. The daemon proxies each connection to the sandbox's
+// namespace address, where the namespace's DNAT hands it to the guest.
+func (m *Manager) Expose(ctx context.Context, id string, guestPort, hostPort int) (int, error) {
+	if guestPort < 1 || guestPort > 65535 || hostPort < 0 || hostPort > 65535 {
+		return 0, fmt.Errorf("port out of range: guest %d, host %d", guestPort, hostPort)
+	}
+	rec, err := m.Store.GetSandbox(ctx, id)
+	if err != nil {
+		return 0, err
+	}
+	if rec.State != store.StateRunning {
+		return 0, fmt.Errorf("%w: sandbox %s is %s", vm.ErrState, id, rec.State)
+	}
+	ln, err := m.listen(ctx, id, guestPort, hostPort)
+	if err != nil {
+		return 0, err
+	}
+	actual := ln.Addr().(*net.TCPAddr).Port
+	if err := m.Store.AddPortForward(ctx, store.PortForward{SandboxID: id, GuestPort: guestPort, HostPort: actual}); err != nil {
+		ln.Close()
+		return 0, err
+	}
+	return actual, nil
+}
+
+// PortForwards lists a sandbox's port forwards.
+func (m *Manager) PortForwards(ctx context.Context, id string) ([]store.PortForward, error) {
+	return m.Store.PortForwards(ctx, id)
+}
+
+func (m *Manager) restoreForwards(ctx context.Context, id string) error {
+	pfs, err := m.Store.PortForwards(ctx, id)
+	if err != nil {
+		return err
+	}
+	var errs []error
+	for _, pf := range pfs {
+		if _, err := m.listen(ctx, id, pf.GuestPort, pf.HostPort); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
+}
+
+func (m *Manager) listen(ctx context.Context, id string, guestPort, hostPort int) (net.Listener, error) {
+	slot, err := m.Store.Slot(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	_, nsAddr, err := m.Net.Addrs(slot)
+	if err != nil {
+		return nil, err
+	}
+	ln, err := net.Listen("tcp", net.JoinHostPort(m.ExposeAddr, strconv.Itoa(hostPort)))
+	if err != nil {
+		return nil, err
+	}
+	target := net.JoinHostPort(nsAddr.String(), strconv.Itoa(guestPort))
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			go proxy(c, target)
+		}
+	}()
+	m.mu.Lock()
+	m.listeners[id] = append(m.listeners[id], ln)
+	m.mu.Unlock()
+	return ln, nil
+}
+
+func proxy(c net.Conn, target string) {
+	defer c.Close()
+	u, err := net.DialTimeout("tcp", target, 5*time.Second)
+	if err != nil {
+		return
+	}
+	defer u.Close()
+	done := make(chan struct{}, 2)
+	cp := func(dst, src net.Conn) {
+		io.Copy(dst, src)
+		if tc, ok := dst.(*net.TCPConn); ok {
+			tc.CloseWrite()
+		}
+		done <- struct{}{}
+	}
+	go cp(u, c)
+	go cp(c, u)
+	<-done
+	<-done
 }

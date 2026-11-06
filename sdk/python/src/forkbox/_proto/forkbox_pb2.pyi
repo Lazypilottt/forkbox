@@ -171,3 +171,21 @@ class DestroySandboxRequest(_message.Message):
 class DestroySandboxResponse(_message.Message):
     __slots__ = ()
     def __init__(self) -> None: ...
+
+class ExposePortRequest(_message.Message):
+    __slots__ = ("sandbox_id", "guest_port", "host_port")
+    SANDBOX_ID_FIELD_NUMBER: _ClassVar[int]
+    GUEST_PORT_FIELD_NUMBER: _ClassVar[int]
+    HOST_PORT_FIELD_NUMBER: _ClassVar[int]
+    sandbox_id: str
+    guest_port: int
+    host_port: int
+    def __init__(self, sandbox_id: _Optional[str] = ..., guest_port: _Optional[int] = ..., host_port: _Optional[int] = ...) -> None: ...
+
+class ExposePortResponse(_message.Message):
+    __slots__ = ("host", "host_port")
+    HOST_FIELD_NUMBER: _ClassVar[int]
+    HOST_PORT_FIELD_NUMBER: _ClassVar[int]
+    host: str
+    host_port: int
+    def __init__(self, host: _Optional[str] = ..., host_port: _Optional[int] = ...) -> None: ...

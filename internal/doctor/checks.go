@@ -416,3 +416,24 @@ func short(sum string) string {
 	}
 	return sum
 }
+
+const (
+	ipForwardSysctl = "/proc/sys/net/ipv4/ip_forward"
+	ipForwardFix    = "sudo sysctl -w net.ipv4.ip_forward=1\necho net.ipv4.ip_forward=1 | sudo tee /etc/sysctl.d/90-forkbox.conf   # keep it after reboots"
+)
+
+// checkIPForward: sandboxes reach the network through the host, which must
+// forward IPv4. Forkbox never changes host settings itself.
+func checkIPForward(_ context.Context, env Env, _ Config) Result {
+	if r, ok := requireLinux(env); !ok {
+		return r
+	}
+	b, err := env.ReadFile(ipForwardSysctl)
+	if err != nil {
+		return fail("cannot read "+ipForwardSysctl+": "+err.Error(), ipForwardFix)
+	}
+	if strings.TrimSpace(string(b)) != "1" {
+		return fail("IPv4 forwarding is off, so sandboxes cannot reach the network", ipForwardFix)
+	}
+	return pass("net.ipv4.ip_forward=1")
+}

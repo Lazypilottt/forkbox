@@ -31,6 +31,9 @@ service Forkbox {
   // guest only once complete.
   rpc WriteFile(stream WriteFileRequest) returns (WriteFileResponse);
   rpc DestroySandbox(DestroySandboxRequest) returns (DestroySandboxResponse);
+  // Forwards a host TCP port to a guest port (for previews). host_port 0
+  // picks a free port. Forwards end when the sandbox is destroyed.
+  rpc ExposePort(ExposePortRequest) returns (ExposePortResponse);
 }
 
 message Sandbox {
@@ -134,3 +137,14 @@ message DestroySandboxRequest {
 }
 
 message DestroySandboxResponse {}
+
+message ExposePortRequest {
+  string sandbox_id = 1;
+  uint32 guest_port = 2;
+  uint32 host_port = 3; // 0: any free port
+}
+
+message ExposePortResponse {
+  string host = 1;      // address the forward listens on
+  uint32 host_port = 2;
+}

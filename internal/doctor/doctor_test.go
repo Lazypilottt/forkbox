@@ -140,6 +140,8 @@ func TestChecks(t *testing.T) {
 		// nftables and iproute2
 		{"nft ok", "nftables", nil, Pass, "nftables v1.0.9", ""},
 		{"ip ok", "iproute2", nil, Pass, "iproute2-6.1.0", ""},
+		{"forwarding on", "ip-forward", nil, Pass, "ip_forward=1", ""},
+		{"forwarding off", "ip-forward", func(e *fakeEnv) { e.files[ipForwardSysctl] = "0\n" }, Fail, "forwarding is off", "sudo sysctl -w net.ipv4.ip_forward=1"},
 		{"nft missing", "nftables", func(e *fakeEnv) { delete(e.paths, "nft") }, Fail, "nft not found", "sudo apt-get install -y nftables"},
 		{"ip missing", "iproute2", func(e *fakeEnv) { delete(e.paths, "ip") }, Fail, "ip not found", "sudo apt-get install -y iproute2"},
 		{"nft only in sbin", "nftables", func(e *fakeEnv) {

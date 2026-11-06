@@ -20,6 +20,7 @@ import (
 
 	"github.com/Lazypilottt/forkbox/internal/api"
 	"github.com/Lazypilottt/forkbox/internal/datadir"
+	"github.com/Lazypilottt/forkbox/internal/netns"
 	"github.com/Lazypilottt/forkbox/internal/sandbox"
 	"github.com/Lazypilottt/forkbox/internal/store"
 	"github.com/Lazypilottt/forkbox/internal/versions"
@@ -51,6 +52,8 @@ func run() error {
 	httpTCP := flag.String("http-tcp", "", "also serve the HTTP gateway on this TCP address (needs --token-file); off by default")
 	tokenFile := flag.String("token-file", "", "file holding the bearer token for the TCP listeners")
 	sweep := flag.Duration("ttl-sweep", 10*time.Second, "how often to destroy sandboxes past their TTL")
+	pool := flag.String("net-pool", netns.DefaultPool, "IPv4 pool for sandbox uplinks (one /30 each)")
+	exposeAddr := flag.String("expose-addr", "127.0.0.1", "host address port forwards listen on")
 	showVersion := flag.Bool("version", false, "print the version and exit")
 	flag.Parse()
 	if *showVersion {
@@ -99,11 +102,20 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	sbm := sandbox.New(*dataDir, vms, st)
+	nm, err := netns.New(*pool, vm.DefaultUID, vm.DefaultGID)
+	if err != nil {
+		return err
+	}
+	sbm := sandbox.New(*dataDir, vms, st, nm)
 	sbm.Log = logger
+	sbm.ExposeAddr = *exposeAddr
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
+	if err := nm.EnsureHost(ctx); err != nil {
+		return err
+	}
+	logger.Printf("network: pool %s (%d slots), guest DNS to %s", nm.Pool, nm.Slots(), nm.DNS)
 	rep, err := sbm.Recover(ctx)
 	if err != nil {
 		logger.Printf("recover: %v", err)
@@ -113,7 +125,7 @@ func run() error {
 			len(rep.Adopted), rep.Adopted, len(rep.Reaped), rep.Reaped, len(rep.Orphans), rep.Orphans)
 	}
 
-	srv := &api.Server{B: sbm}
+	srv := &api.Server{B: sbm, ExposeHost: *exposeAddr}
 	errc := make(chan error, 4)
 	var closers []func()
 

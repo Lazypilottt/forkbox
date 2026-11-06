@@ -66,7 +66,18 @@ jobs:
       - name: host tools
         run: |
           sudo apt-get update -q
-          sudo apt-get install -y -q --no-install-recommends squashfs-tools e2fsprogs xfsprogs nftables
+          sudo apt-get install -y -q --no-install-recommends squashfs-tools e2fsprogs xfsprogs nftables tcpdump
+      # Host setup an operator does once (Forkbox never changes host network
+      # settings or other firewall tables itself): IPv4 forwarding, and,
+      # because Docker sets the FORWARD policy to drop, accepting the
+      # sandbox address pool in Docker's DOCKER-USER chain.
+      - name: host forwarding for sandboxes
+        run: |
+          sudo sysctl -w net.ipv4.ip_forward=1
+          if sudo iptables -n -L DOCKER-USER >/dev/null 2>&1; then
+            sudo iptables -I DOCKER-USER -s 10.200.0.0/16 -j ACCEPT
+            sudo iptables -I DOCKER-USER -d 10.200.0.0/16 -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+          fi
       - name: data dir on reflink XFS
         run: |
           # A sparse loop file on whichever disk has more room.

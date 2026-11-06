@@ -278,6 +278,17 @@ class Sandbox:
             raise CommandError(f"command failed with exit code {result.exit_code}: {result.stderr.strip()[:500]}", result)
         return result
 
+    def expose(self, port: int, host_port: int = 0) -> tuple[str, int]:
+        """Forward a host TCP port to ``port`` in the guest (for previews).
+        Returns the ``(host, port)`` the forward listens on."""
+        try:
+            r = self._client.stub.ExposePort(
+                pb.ExposePortRequest(sandbox_id=self.id, guest_port=port, host_port=host_port), metadata=self._client.metadata
+            )
+        except grpc.RpcError as e:
+            raise from_rpc(e) from None
+        return r.host, r.host_port
+
     def destroy(self) -> None:
         """Stop the sandbox and remove everything it used."""
         try:

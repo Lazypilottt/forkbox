@@ -15,14 +15,18 @@ import (
 
 	"github.com/Lazypilottt/forkbox/internal/agent"
 	"github.com/Lazypilottt/forkbox/internal/agentwire"
+	"github.com/Lazypilottt/forkbox/internal/netns"
 	"github.com/Lazypilottt/forkbox/internal/vm"
 	"github.com/Lazypilottt/forkbox/internal/vm/agentclient"
 )
 
 // Builder builds templates into <data>/templates/<id>.
 type Builder struct {
-	DataDir      string
-	Manager      *vm.Manager
+	DataDir string
+	Manager *vm.Manager
+	// Net creates the build VM's namespace (a tap only, no uplink), so the
+	// snapshot holds the guest's network device and configuration.
+	Net          *netns.Manager
 	Kernel       string // guest kernel (vmlinux) path
 	KernelVer    string
 	FCVersion    string
@@ -320,7 +324,10 @@ func installAgent(root string, bin []byte, img *Image, spec *Spec) error {
 	if err := r.Chmod(p, 0o755); err != nil {
 		return err
 	}
-	gc := agent.GuestConfig{Env: append(append([]string(nil), img.Env...), spec.EnvList()...), Cwd: img.WorkDir}
+	gc := agent.GuestConfig{
+		Env: append(append([]string(nil), img.Env...), spec.EnvList()...), Cwd: img.WorkDir,
+		Net: &agent.GuestNet{Iface: netns.GuestIface, Addr: fmt.Sprintf("%s/%d", netns.GuestIP, netns.PrefixLen), Gateway: netns.TapIP},
+	}
 	b, err := json.MarshalIndent(gc, "", "  ")
 	if err != nil {
 		return err
@@ -330,6 +337,11 @@ func installAgent(root string, bin []byte, img *Image, spec *Spec) error {
 		return err
 	}
 	if err := r.WriteFile(cfg, append(b, '\n'), 0o644); err != nil {
+		return err
+	}
+	// The namespace answers DNS on the gateway (and sends it upstream).
+	_ = r.Remove("etc/resolv.conf") // often a dangling symlink in images
+	if err := r.WriteFile("etc/resolv.conf", []byte("nameserver "+netns.TapIP+"\n"), 0o644); err != nil {
 		return err
 	}
 	return r.WriteFile("etc/hostname", []byte(spec.Name+"\n"), 0o644)
@@ -356,14 +368,21 @@ func mkfs(ctx context.Context, root, img string, sizeMiB int, out io.Writer) err
 // bootAndSnapshot boots the image with the agent as init, runs the warm-up
 // commands through the agent, then pauses and takes the base snapshot.
 func (b *Builder) bootAndSnapshot(ctx context.Context, t *Template, staging string, out io.Writer) error {
+	id := "build-" + strings.TrimPrefix(t.ID, "tpl-")[:12]
+	if err := b.Net.Setup(ctx, id, -1); err != nil {
+		return err
+	}
+	defer b.Net.Teardown(context.WithoutCancel(ctx), id)
 	cfg := vm.Config{
-		ID:         "build-" + strings.TrimPrefix(t.ID, "tpl-")[:12],
+		ID:         id,
 		VCPUs:      t.Spec.VCPUs,
 		MemMiB:     t.Spec.MemoryMiB,
 		Kernel:     b.Kernel,
 		KernelArgs: vm.DefaultKernelArgs + " init=" + agent.InstallPath,
 		Rootfs:     vm.Drive{Path: filepath.Join(staging, RootfsFile)},
 		Vsock:      &vm.Vsock{GuestCID: 3},
+		Net:        &vm.NetIface{IfaceID: netns.GuestIface, HostDev: netns.TapName, GuestMAC: netns.GuestMAC},
+		NetNS:      netns.Path(id),
 	}
 	_ = b.Manager.Reap(cfg.ID) // a previous build killed half-way
 	v, err := b.Manager.Boot(ctx, cfg)

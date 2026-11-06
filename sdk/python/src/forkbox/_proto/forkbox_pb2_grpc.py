@@ -69,6 +69,11 @@ class ForkboxStub:
                 request_serializer=forkbox__pb2.DestroySandboxRequest.SerializeToString,
                 response_deserializer=forkbox__pb2.DestroySandboxResponse.FromString,
                 _registered_method=True)
+        self.ExposePort = channel.unary_unary(
+                '/forkbox.v1.Forkbox/ExposePort',
+                request_serializer=forkbox__pb2.ExposePortRequest.SerializeToString,
+                response_deserializer=forkbox__pb2.ExposePortResponse.FromString,
+                _registered_method=True)
 
 
 class ForkboxServicer:
@@ -123,6 +128,14 @@ class ForkboxServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def ExposePort(self, request, context):
+        """Forwards a host TCP port to a guest port (for previews). host_port 0
+        picks a free port. Forwards end when the sandbox is destroyed.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_ForkboxServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -160,6 +173,11 @@ def add_ForkboxServicer_to_server(servicer, server):
                     servicer.DestroySandbox,
                     request_deserializer=forkbox__pb2.DestroySandboxRequest.FromString,
                     response_serializer=forkbox__pb2.DestroySandboxResponse.SerializeToString,
+            ),
+            'ExposePort': grpc.unary_unary_rpc_method_handler(
+                    servicer.ExposePort,
+                    request_deserializer=forkbox__pb2.ExposePortRequest.FromString,
+                    response_serializer=forkbox__pb2.ExposePortResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -351,6 +369,33 @@ class Forkbox:
             '/forkbox.v1.Forkbox/DestroySandbox',
             forkbox__pb2.DestroySandboxRequest.SerializeToString,
             forkbox__pb2.DestroySandboxResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ExposePort(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/forkbox.v1.Forkbox/ExposePort',
+            forkbox__pb2.ExposePortRequest.SerializeToString,
+            forkbox__pb2.ExposePortResponse.FromString,
             options,
             channel_credentials,
             insecure,

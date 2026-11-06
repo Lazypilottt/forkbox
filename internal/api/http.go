@@ -28,6 +28,7 @@ import (
 //	       answers text/event-stream: events "started", "stdout", "stderr" (data {"b64": ...}), "exit"
 //	GET    /v1/sandboxes/{id}/files?path=/abs  read a file (raw bytes)
 //	PUT    /v1/sandboxes/{id}/files?path=/abs&mode=0644&parents=1   write a file (raw body)
+//	POST   /v1/sandboxes/{id}/ports            expose  {"guest_port": 8000, "host_port": 0}
 //
 // Errors are JSON {"code": "NOT_FOUND", "message": "..."} with a matching
 // HTTP status.
@@ -59,6 +60,16 @@ func NewHTTPHandler(s *Server, tok *Token) http.Handler {
 	mux.HandleFunc("POST /v1/sandboxes/{id}/exec", s.httpExec)
 	mux.HandleFunc("GET /v1/sandboxes/{id}/files", s.httpReadFile)
 	mux.HandleFunc("PUT /v1/sandboxes/{id}/files", s.httpWriteFile)
+	mux.HandleFunc("POST /v1/sandboxes/{id}/ports", func(w http.ResponseWriter, r *http.Request) {
+		var req pb.ExposePortRequest
+		if err := readProto(r, &req); err != nil {
+			writeErr(w, err)
+			return
+		}
+		req.SandboxId = r.PathValue("id")
+		out, err := s.ExposePort(r.Context(), &req)
+		writeProto(w, out, err)
+	})
 	if tok == nil {
 		return mux
 	}
