@@ -412,3 +412,16 @@ func waitGone(t *testing.T, pid int) {
 		time.Sleep(20 * time.Millisecond)
 	}
 }
+
+func TestGuestDefaults(t *testing.T) {
+	f, c := newFakeVsock(t)
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	must(t, err)
+	f.srv.Env = []string{"FOO=image", "BAR=image"}
+	f.srv.Cwd = dir
+	r, err := c.Run(testCtx(t), ExecRequest{Args: []string{"sh", "-c", `echo "$FOO $BAR"; pwd`}, Env: []string{"BAR=request"}}, 0)
+	must(t, err)
+	if want := "image request\n" + dir + "\n"; string(r.Stdout) != want {
+		t.Errorf("stdout %q, want %q", r.Stdout, want)
+	}
+}

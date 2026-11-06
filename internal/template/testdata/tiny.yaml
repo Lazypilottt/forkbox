@@ -1,0 +1,13 @@
+# Smallest useful template, for the integration tests.
+name: tiny
+base: debian:bookworm-slim
+files:
+  - src: motd
+    dst: /etc/motd
+env:
+  FORKBOX_TEST: "1"
+warm_up:
+  - test "$FORKBOX_TEST" = 1 && grep -q forkbox /etc/motd
+vcpus: 1
+memory_mib: 256
+disk_size_mib: 512

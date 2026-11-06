@@ -1,0 +1,15 @@
+# Python 3.12 with git, build tools, numpy and pytest.
+name: python
+base: python:3.12-slim
+apt: [git, build-essential, ca-certificates, curl]
+pip: [numpy, pytest]
+env:
+  PYTHONUNBUFFERED: "1"
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+warm_up:
+  # Import numpy once so its shared libraries and bytecode are in memory
+  # when the base snapshot is taken.
+  - python -c "import numpy; numpy.ones(1000).sum(); import pytest"
+vcpus: 2
+memory_mib: 512
+disk_size_mib: 2048

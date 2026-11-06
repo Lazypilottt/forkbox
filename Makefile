@@ -3,8 +3,9 @@ GOTESTFLAGS ?=
 
 .PHONY: build agent proto check integration fmt
 
-build:
-	go build -o bin/ ./cmd/...
+# Host binaries, plus the static guest agent next to them (templates use it).
+build: agent
+	go build -o bin/ ./cmd/forkbox ./cmd/forkboxd
 
 # The guest agent: static, for x86_64 Linux guests.
 agent:

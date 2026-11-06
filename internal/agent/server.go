@@ -5,6 +5,7 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -50,11 +51,40 @@ const (
 	requestTimeout = 10 * time.Second
 )
 
+// GuestConfigPath holds the image's and template's defaults for Exec,
+// written by the template builder.
+const GuestConfigPath = "/etc/forkbox/agent.json"
+
+// GuestConfig is the content of GuestConfigPath.
+type GuestConfig struct {
+	Env []string `json:"env"` // KEY=value, over the agent's defaults
+	Cwd string   `json:"cwd"` // default working directory
+}
+
+// LoadGuestConfig reads path. A missing file is an empty config.
+func LoadGuestConfig(path string) (GuestConfig, error) {
+	var c GuestConfig
+	b, err := os.ReadFile(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return c, nil
+	}
+	if err != nil {
+		return c, err
+	}
+	if err := json.Unmarshal(b, &c); err != nil {
+		return c, fmt.Errorf("%s: %w", path, err)
+	}
+	return c, nil
+}
+
 // Server answers agent requests. The zero value is not usable; use New.
 type Server struct {
 	Version  string
 	MaxConns int
 	Log      *log.Logger
+	// Env and Cwd are Exec defaults (see GuestConfig).
+	Env []string
+	Cwd string
 
 	ctx    context.Context
 	cancel context.CancelFunc

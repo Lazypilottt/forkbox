@@ -1,0 +1,12 @@
+# Node.js 22 LTS with git and npm.
+name: node
+base: node:22-slim
+apt: [git, ca-certificates, curl]
+env:
+  NODE_ENV: development
+warm_up:
+  - node -e "require('fs'); require('child_process'); console.log(process.version)"
+  - npm --version
+vcpus: 2
+memory_mib: 512
+disk_size_mib: 2048

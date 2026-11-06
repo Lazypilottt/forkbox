@@ -47,8 +47,14 @@ func (s *Server) exec(c net.Conn, r *agentpb.ExecRequest) error {
 	}
 
 	cmd := exec.Command(r.Args[0], r.Args[1:]...)
-	cmd.Env = append(append([]string(nil), defaultEnv...), r.Env...)
+	// Later entries win: agent defaults, then the image and template
+	// (GuestConfig), then the request.
+	env := append(append([]string(nil), defaultEnv...), s.Env...)
+	cmd.Env = append(env, r.Env...)
 	cmd.Dir = r.Cwd
+	if cmd.Dir == "" {
+		cmd.Dir = s.Cwd
+	}
 	if cmd.Dir == "" {
 		cmd.Dir = "/"
 	}

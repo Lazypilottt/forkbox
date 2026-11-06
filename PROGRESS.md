@@ -471,7 +471,7 @@ Nothing.
 
    Not needed before then.
 2. **Actions minutes:** the unit job takes about 30 s and the integration job about 1.5 minutes per push, both
-   is billed to the account's private-repo minutes.
+   billed to the account's private-repo minutes.
 
 ## Ideas
 

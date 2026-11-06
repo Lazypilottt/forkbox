@@ -29,12 +29,33 @@ func main() {
 	}
 	logger := log.New(os.Stderr, "forkbox-agent: ", 0) // journald adds timestamps
 
+	// As PID 1 (kernel init= in images without an init system), become a
+	// minimal init and run the server as a child.
+	if os.Getpid() == 1 {
+		agent.RunInit(logger, []string{"serve", fmt.Sprintf("-port=%d", *port)})
+	}
+	if flag.Arg(0) != "" && flag.Arg(0) != "serve" {
+		logger.Fatalf("unknown command %q (usage: forkbox-agent [serve] [-port N])", flag.Arg(0))
+	}
+	// Flags may also follow "serve".
+	if flag.Arg(0) == "serve" {
+		fs := flag.NewFlagSet("serve", flag.ExitOnError)
+		p := fs.Uint("port", *port, "vsock port to listen on")
+		_ = fs.Parse(flag.Args()[1:])
+		*port = *p
+	}
+	gc, err := agent.LoadGuestConfig(agent.GuestConfigPath)
+	if err != nil {
+		logger.Printf("guest config: %v (using defaults)", err)
+	}
+
 	ln, err := agent.ListenVsock(uint32(*port))
 	if err != nil {
 		logger.Fatal(err)
 	}
 	srv := agent.New(version)
 	srv.Log = logger
+	srv.Env, srv.Cwd = gc.Env, gc.Cwd
 
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGTERM, syscall.SIGINT)

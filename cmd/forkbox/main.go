@@ -32,6 +32,9 @@ Usage:
       Download the pinned Firecracker release and guest kernel into the data
       directory and verify their checksums.
 
+  forkbox templates build|list|inspect|rm ...
+      Build and manage templates (forkbox templates for details).
+
   forkbox version
       Print the CLI version and the pinned Firecracker release.
 
@@ -56,6 +59,8 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		return runDoctor(ctx, args[1:], stdout, stderr)
 	case "setup":
 		return runSetup(ctx, args[1:], stdout, stderr)
+	case "templates":
+		return runTemplates(ctx, args[1:], stdout, stderr)
 	case "version", "--version":
 		return runVersion(stdout, stderr)
 	case "help", "-h", "--help":

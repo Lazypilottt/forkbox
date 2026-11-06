@@ -43,7 +43,7 @@ jobs:
     # GitHub's standard Linux runners expose hardware virtualization; the
     # job grants access to /dev/kvm and runs real Firecracker microVMs.
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-go@v6
@@ -82,8 +82,22 @@ jobs:
           sudo -n bin/forkbox setup
       - name: forkbox doctor
         run: sudo -n bin/forkbox doctor
+      - name: templates
+        run: |
+          make build
+          sudo -n bin/forkbox templates build templates/python.yaml
+          sudo -n bin/forkbox templates build templates/node.yaml
+          # An unchanged spec is a no-op.
+          start=$(date +%s)
+          out=$(sudo -n bin/forkbox templates build templates/python.yaml)
+          echo "$out"
+          echo "$out" | grep -q 'is up to date'
+          test $(( $(date +%s) - start )) -lt 5
+          sudo -n bin/forkbox templates list
+          sudo -n bin/forkbox templates inspect python
+          sudo -n bin/forkbox templates inspect node
       - name: integration tests
-        run: make integration GOTESTFLAGS="-v -timeout 30m"
+        run: make integration GOTESTFLAGS="-v -timeout 40m"
       - name: doctor in a container without /dev/kvm
         run: |
           CGO_ENABLED=0 go build -o bin/forkbox-static ./cmd/forkbox
