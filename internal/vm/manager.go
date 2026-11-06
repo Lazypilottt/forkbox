@@ -370,3 +370,9 @@ func splitNul(b []byte) []string {
 	}
 	return out
 }
+
+// CgroupPath is the cgroup v2 directory a VM with this id gets.
+func (m *Manager) CgroupPath(id string) string { return m.cg.path(id) }
+
+// DataDir is the manager's data directory.
+func (m *Manager) DataDir() string { return m.o.DataDir }

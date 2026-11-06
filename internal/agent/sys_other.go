@@ -35,3 +35,14 @@ func ListenVsock(port uint32) (net.Listener, error) {
 func RunInit(logger *log.Logger, serveArgs []string) {
 	logger.Fatal("init mode only runs in a Linux guest")
 }
+
+type otherSystem struct{}
+
+func defaultSystem() system { return otherSystem{} }
+
+func (otherSystem) Now() time.Time           { return time.Now() }
+func (otherSystem) SetClock(time.Time) error { return errors.New("not supported off Linux") }
+func (otherSystem) AddEntropy([]byte) error  { return errors.New("not supported off Linux") }
+func (otherSystem) SetHostname(string) error { return errors.New("not supported off Linux") }
+func (s *Server) WatchVMGenID() error        { return errors.New("uevents are Linux-only") }
+func isNewVMGenID([]byte) bool               { return false }

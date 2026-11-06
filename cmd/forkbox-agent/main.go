@@ -56,6 +56,9 @@ func main() {
 	srv := agent.New(version)
 	srv.Log = logger
 	srv.Env, srv.Cwd = gc.Env, gc.Cwd
+	if err := srv.WatchVMGenID(); err != nil {
+		logger.Printf("VM generation ID changes will not be seen: %v", err)
+	}
 
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGTERM, syscall.SIGINT)

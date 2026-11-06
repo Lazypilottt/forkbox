@@ -62,3 +62,6 @@ func (l layout) consoleLog() string { return filepath.Join(l.runDir(), "console.
 func VsockSocketPath(dataDir, id string) string {
 	return layout{dataDir, id}.host(jailVsock)
 }
+
+// JailDir is a VM's jail directory, <data>/jail/firecracker/<id>.
+func JailDir(dataDir, id string) string { return layout{dataDir, id}.jailDir() }

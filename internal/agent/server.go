@@ -15,6 +15,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/Lazypilottt/forkbox/internal/agentwire"
@@ -85,6 +86,12 @@ type Server struct {
 	// Env and Cwd are Exec defaults (see GuestConfig).
 	Env []string
 	Cwd string
+	// EtcDir is where machine-id and hostname are written (default /etc).
+	EtcDir string
+
+	sys        system
+	generation atomic.Uint64
+	sandboxID  string // guarded by mu
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -102,9 +109,11 @@ func New(version string) *Server {
 		Version:  version,
 		MaxConns: DefaultMaxConns,
 		Log:      log.New(io.Discard, "", 0),
+		EtcDir:   "/etc",
 		ctx:      ctx,
 		cancel:   cancel,
 		execs:    map[string]int{},
+		sys:      defaultSystem(),
 	}
 }
 
@@ -173,7 +182,14 @@ func (s *Server) ServeConn(c net.Conn) {
 	case *agentpb.Request_WaitPort:
 		err = s.waitPort(c, op.WaitPort)
 	case *agentpb.Request_Info:
-		err = agentwire.Write(c, &agentpb.Response{Msg: &agentpb.Response_Info{Info: info(s.Version)}})
+		in := info(s.Version)
+		s.mu.Lock()
+		in.SandboxId = s.sandboxID
+		s.mu.Unlock()
+		in.Generation = s.generation.Load()
+		err = agentwire.Write(c, &agentpb.Response{Msg: &agentpb.Response_Info{Info: in}})
+	case *agentpb.Request_Restored:
+		err = s.restored(c, op.Restored)
 	default:
 		err = agentwire.Write(c, errResp(agentpb.Error_INVALID_ARGUMENT, fmt.Sprintf("unknown or unexpected operation %T", req.Op)))
 	}

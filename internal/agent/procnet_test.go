@@ -28,3 +28,14 @@ func TestListeningIn(t *testing.T) {
 		t.Errorf("garbage parsed as listening")
 	}
 }
+
+func TestIsNewVMGenIDLinuxOnly(t *testing.T) {
+	msg := []byte("change@/devices/platform/QEMUVGID:00\x00ACTION=change\x00NEW_VMGENID=1\x00SEQNUM=42")
+	got := isNewVMGenID(msg)
+	if want := isLinux(); got != want {
+		t.Errorf("isNewVMGenID = %v, want %v", got, want)
+	}
+	if isNewVMGenID([]byte("add@/devices/x\x00ACTION=add")) {
+		t.Errorf("unrelated uevent matched")
+	}
+}

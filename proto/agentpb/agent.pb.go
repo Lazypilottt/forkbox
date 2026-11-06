@@ -18,6 +18,7 @@
 //   stat       -> stat
 //   wait_port  -> wait_port
 //   info       -> info
+//   restored   -> restored
 //
 // Any operation may end with `error` instead.
 
@@ -164,6 +165,7 @@ type Request struct {
 	//	*Request_WaitPort
 	//	*Request_Info
 	//	*Request_Chunk
+	//	*Request_Restored
 	Op            isRequest_Op `protobuf_oneof:"op"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -287,6 +289,15 @@ func (x *Request) GetChunk() *Chunk {
 	return nil
 }
 
+func (x *Request) GetRestored() *RestoredRequest {
+	if x != nil {
+		if x, ok := x.Op.(*Request_Restored); ok {
+			return x.Restored
+		}
+	}
+	return nil
+}
+
 type isRequest_Op interface {
 	isRequest_Op()
 }
@@ -328,6 +339,10 @@ type Request_Chunk struct {
 	Chunk *Chunk `protobuf:"bytes,9,opt,name=chunk,proto3,oneof"`
 }
 
+type Request_Restored struct {
+	Restored *RestoredRequest `protobuf:"bytes,10,opt,name=restored,proto3,oneof"`
+}
+
 func (*Request_Ping) isRequest_Op() {}
 
 func (*Request_Exec) isRequest_Op() {}
@@ -346,6 +361,8 @@ func (*Request_Info) isRequest_Op() {}
 
 func (*Request_Chunk) isRequest_Op() {}
 
+func (*Request_Restored) isRequest_Op() {}
+
 type Response struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Types that are valid to be assigned to Msg:
@@ -362,6 +379,7 @@ type Response struct {
 	//	*Response_Stat
 	//	*Response_WaitPort
 	//	*Response_Info
+	//	*Response_Restored
 	Msg           isResponse_Msg `protobuf_oneof:"msg"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -512,6 +530,15 @@ func (x *Response) GetInfo() *InfoResponse {
 	return nil
 }
 
+func (x *Response) GetRestored() *RestoredResponse {
+	if x != nil {
+		if x, ok := x.Msg.(*Response_Restored); ok {
+			return x.Restored
+		}
+	}
+	return nil
+}
+
 type isResponse_Msg interface {
 	isResponse_Msg()
 }
@@ -564,6 +591,10 @@ type Response_Info struct {
 	Info *InfoResponse `protobuf:"bytes,12,opt,name=info,proto3,oneof"`
 }
 
+type Response_Restored struct {
+	Restored *RestoredResponse `protobuf:"bytes,13,opt,name=restored,proto3,oneof"`
+}
+
 func (*Response_Error) isResponse_Msg() {}
 
 func (*Response_Pong) isResponse_Msg() {}
@@ -587,6 +618,8 @@ func (*Response_Stat) isResponse_Msg() {}
 func (*Response_WaitPort) isResponse_Msg() {}
 
 func (*Response_Info) isResponse_Msg() {}
+
+func (*Response_Restored) isResponse_Msg() {}
 
 type Error struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -1579,6 +1612,8 @@ type InfoResponse struct {
 	UptimeMs         uint64                 `protobuf:"varint,4,opt,name=uptime_ms,json=uptimeMs,proto3" json:"uptime_ms,omitempty"`
 	RealtimeUnixNano int64                  `protobuf:"varint,5,opt,name=realtime_unix_nano,json=realtimeUnixNano,proto3" json:"realtime_unix_nano,omitempty"`
 	AgentVersion     string                 `protobuf:"bytes,6,opt,name=agent_version,json=agentVersion,proto3" json:"agent_version,omitempty"`
+	SandboxId        string                 `protobuf:"bytes,7,opt,name=sandbox_id,json=sandboxId,proto3" json:"sandbox_id,omitempty"` // set by the last restored call
+	Generation       uint64                 `protobuf:"varint,8,opt,name=generation,proto3" json:"generation,omitempty"`               // VM generation ID changes seen since boot
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -1655,11 +1690,165 @@ func (x *InfoResponse) GetAgentVersion() string {
 	return ""
 }
 
+func (x *InfoResponse) GetSandboxId() string {
+	if x != nil {
+		return x.SandboxId
+	}
+	return ""
+}
+
+func (x *InfoResponse) GetGeneration() uint64 {
+	if x != nil {
+		return x.Generation
+	}
+	return 0
+}
+
+// Sent by the host right after a VM resumes from a snapshot. The agent makes
+// the clone distinct from its siblings: reseeds the kernel RNG with the
+// host's entropy, writes a new machine-id, sets the hostname, and steps the
+// wall clock to the host's.
+type RestoredRequest struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	SandboxId        string                 `protobuf:"bytes,1,opt,name=sandbox_id,json=sandboxId,proto3" json:"sandbox_id,omitempty"`
+	Hostname         string                 `protobuf:"bytes,2,opt,name=hostname,proto3" json:"hostname,omitempty"`
+	RealtimeUnixNano int64                  `protobuf:"varint,3,opt,name=realtime_unix_nano,json=realtimeUnixNano,proto3" json:"realtime_unix_nano,omitempty"` // host clock when sent
+	Entropy          []byte                 `protobuf:"bytes,4,opt,name=entropy,proto3" json:"entropy,omitempty"`                                              // random bytes from the host (up to 512)
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *RestoredRequest) Reset() {
+	*x = RestoredRequest{}
+	mi := &file_agent_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RestoredRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RestoredRequest) ProtoMessage() {}
+
+func (x *RestoredRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_agent_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RestoredRequest.ProtoReflect.Descriptor instead.
+func (*RestoredRequest) Descriptor() ([]byte, []int) {
+	return file_agent_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *RestoredRequest) GetSandboxId() string {
+	if x != nil {
+		return x.SandboxId
+	}
+	return ""
+}
+
+func (x *RestoredRequest) GetHostname() string {
+	if x != nil {
+		return x.Hostname
+	}
+	return ""
+}
+
+func (x *RestoredRequest) GetRealtimeUnixNano() int64 {
+	if x != nil {
+		return x.RealtimeUnixNano
+	}
+	return 0
+}
+
+func (x *RestoredRequest) GetEntropy() []byte {
+	if x != nil {
+		return x.Entropy
+	}
+	return nil
+}
+
+type RestoredResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ClockStepNs   int64                  `protobuf:"varint,1,opt,name=clock_step_ns,json=clockStepNs,proto3" json:"clock_step_ns,omitempty"` // how far the guest clock was moved
+	MachineId     string                 `protobuf:"bytes,2,opt,name=machine_id,json=machineId,proto3" json:"machine_id,omitempty"`
+	Generation    uint64                 `protobuf:"varint,3,opt,name=generation,proto3" json:"generation,omitempty"`
+	Actions       []string               `protobuf:"bytes,4,rep,name=actions,proto3" json:"actions,omitempty"` // what was done, for the log
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RestoredResponse) Reset() {
+	*x = RestoredResponse{}
+	mi := &file_agent_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RestoredResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RestoredResponse) ProtoMessage() {}
+
+func (x *RestoredResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_agent_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RestoredResponse.ProtoReflect.Descriptor instead.
+func (*RestoredResponse) Descriptor() ([]byte, []int) {
+	return file_agent_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *RestoredResponse) GetClockStepNs() int64 {
+	if x != nil {
+		return x.ClockStepNs
+	}
+	return 0
+}
+
+func (x *RestoredResponse) GetMachineId() string {
+	if x != nil {
+		return x.MachineId
+	}
+	return ""
+}
+
+func (x *RestoredResponse) GetGeneration() uint64 {
+	if x != nil {
+		return x.Generation
+	}
+	return 0
+}
+
+func (x *RestoredResponse) GetActions() []string {
+	if x != nil {
+		return x.Actions
+	}
+	return nil
+}
+
 var File_agent_proto protoreflect.FileDescriptor
 
 const file_agent_proto_rawDesc = "" +
 	"\n" +
-	"\vagent.proto\x12\x10forkbox.agent.v1\"\x98\x04\n" +
+	"\vagent.proto\x12\x10forkbox.agent.v1\"\xd9\x04\n" +
 	"\aRequest\x123\n" +
 	"\x04ping\x18\x01 \x01(\v2\x1d.forkbox.agent.v1.PingRequestH\x00R\x04ping\x123\n" +
 	"\x04exec\x18\x02 \x01(\v2\x1d.forkbox.agent.v1.ExecRequestH\x00R\x04exec\x129\n" +
@@ -1670,8 +1859,10 @@ const file_agent_proto_rawDesc = "" +
 	"\x04stat\x18\x06 \x01(\v2\x1d.forkbox.agent.v1.StatRequestH\x00R\x04stat\x12@\n" +
 	"\twait_port\x18\a \x01(\v2!.forkbox.agent.v1.WaitPortRequestH\x00R\bwaitPort\x123\n" +
 	"\x04info\x18\b \x01(\v2\x1d.forkbox.agent.v1.InfoRequestH\x00R\x04info\x12/\n" +
-	"\x05chunk\x18\t \x01(\v2\x17.forkbox.agent.v1.ChunkH\x00R\x05chunkB\x04\n" +
-	"\x02op\"\xc3\x05\n" +
+	"\x05chunk\x18\t \x01(\v2\x17.forkbox.agent.v1.ChunkH\x00R\x05chunk\x12?\n" +
+	"\brestored\x18\n" +
+	" \x01(\v2!.forkbox.agent.v1.RestoredRequestH\x00R\brestoredB\x04\n" +
+	"\x02op\"\x85\x06\n" +
 	"\bResponse\x12/\n" +
 	"\x05error\x18\x01 \x01(\v2\x17.forkbox.agent.v1.ErrorH\x00R\x05error\x124\n" +
 	"\x04pong\x18\x02 \x01(\v2\x1e.forkbox.agent.v1.PingResponseH\x00R\x04pong\x12B\n" +
@@ -1686,7 +1877,8 @@ const file_agent_proto_rawDesc = "" +
 	"\x04stat\x18\n" +
 	" \x01(\v2\x1e.forkbox.agent.v1.StatResponseH\x00R\x04stat\x12A\n" +
 	"\twait_port\x18\v \x01(\v2\".forkbox.agent.v1.WaitPortResponseH\x00R\bwaitPort\x124\n" +
-	"\x04info\x18\f \x01(\v2\x1e.forkbox.agent.v1.InfoResponseH\x00R\x04infoB\x05\n" +
+	"\x04info\x18\f \x01(\v2\x1e.forkbox.agent.v1.InfoResponseH\x00R\x04info\x12@\n" +
+	"\brestored\x18\r \x01(\v2\".forkbox.agent.v1.RestoredResponseH\x00R\brestoredB\x05\n" +
 	"\x03msg\"\xc8\x01\n" +
 	"\x05Error\x120\n" +
 	"\x04code\x18\x01 \x01(\x0e2\x1c.forkbox.agent.v1.Error.CodeR\x04code\x12\x18\n" +
@@ -1760,7 +1952,7 @@ const file_agent_proto_rawDesc = "" +
 	"timeout_ms\x18\x02 \x01(\x04R\ttimeoutMs\"0\n" +
 	"\x10WaitPortResponse\x12\x1c\n" +
 	"\tlistening\x18\x01 \x01(\bR\tlistening\"\r\n" +
-	"\vInfoRequest\"\xd2\x01\n" +
+	"\vInfoRequest\"\x91\x02\n" +
 	"\fInfoResponse\x12\x1a\n" +
 	"\bhostname\x18\x01 \x01(\tR\bhostname\x12\x1d\n" +
 	"\n" +
@@ -1768,7 +1960,26 @@ const file_agent_proto_rawDesc = "" +
 	"\aboot_id\x18\x03 \x01(\tR\x06bootId\x12\x1b\n" +
 	"\tuptime_ms\x18\x04 \x01(\x04R\buptimeMs\x12,\n" +
 	"\x12realtime_unix_nano\x18\x05 \x01(\x03R\x10realtimeUnixNano\x12#\n" +
-	"\ragent_version\x18\x06 \x01(\tR\fagentVersionB.Z,github.com/Lazypilottt/forkbox/proto/agentpbb\x06proto3"
+	"\ragent_version\x18\x06 \x01(\tR\fagentVersion\x12\x1d\n" +
+	"\n" +
+	"sandbox_id\x18\a \x01(\tR\tsandboxId\x12\x1e\n" +
+	"\n" +
+	"generation\x18\b \x01(\x04R\n" +
+	"generation\"\x94\x01\n" +
+	"\x0fRestoredRequest\x12\x1d\n" +
+	"\n" +
+	"sandbox_id\x18\x01 \x01(\tR\tsandboxId\x12\x1a\n" +
+	"\bhostname\x18\x02 \x01(\tR\bhostname\x12,\n" +
+	"\x12realtime_unix_nano\x18\x03 \x01(\x03R\x10realtimeUnixNano\x12\x18\n" +
+	"\aentropy\x18\x04 \x01(\fR\aentropy\"\x8f\x01\n" +
+	"\x10RestoredResponse\x12\"\n" +
+	"\rclock_step_ns\x18\x01 \x01(\x03R\vclockStepNs\x12\x1d\n" +
+	"\n" +
+	"machine_id\x18\x02 \x01(\tR\tmachineId\x12\x1e\n" +
+	"\n" +
+	"generation\x18\x03 \x01(\x04R\n" +
+	"generation\x12\x18\n" +
+	"\aactions\x18\x04 \x03(\tR\aactionsB.Z,github.com/Lazypilottt/forkbox/proto/agentpbb\x06proto3"
 
 var (
 	file_agent_proto_rawDescOnce sync.Once
@@ -1783,7 +1994,7 @@ func file_agent_proto_rawDescGZIP() []byte {
 }
 
 var file_agent_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 22)
+var file_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 24)
 var file_agent_proto_goTypes = []any{
 	(Error_Code)(0),          // 0: forkbox.agent.v1.Error.Code
 	(Output_Stream)(0),       // 1: forkbox.agent.v1.Output.Stream
@@ -1809,6 +2020,8 @@ var file_agent_proto_goTypes = []any{
 	(*WaitPortResponse)(nil), // 21: forkbox.agent.v1.WaitPortResponse
 	(*InfoRequest)(nil),      // 22: forkbox.agent.v1.InfoRequest
 	(*InfoResponse)(nil),     // 23: forkbox.agent.v1.InfoResponse
+	(*RestoredRequest)(nil),  // 24: forkbox.agent.v1.RestoredRequest
+	(*RestoredResponse)(nil), // 25: forkbox.agent.v1.RestoredResponse
 }
 var file_agent_proto_depIdxs = []int32{
 	5,  // 0: forkbox.agent.v1.Request.ping:type_name -> forkbox.agent.v1.PingRequest
@@ -1820,25 +2033,27 @@ var file_agent_proto_depIdxs = []int32{
 	20, // 6: forkbox.agent.v1.Request.wait_port:type_name -> forkbox.agent.v1.WaitPortRequest
 	22, // 7: forkbox.agent.v1.Request.info:type_name -> forkbox.agent.v1.InfoRequest
 	16, // 8: forkbox.agent.v1.Request.chunk:type_name -> forkbox.agent.v1.Chunk
-	4,  // 9: forkbox.agent.v1.Response.error:type_name -> forkbox.agent.v1.Error
-	6,  // 10: forkbox.agent.v1.Response.pong:type_name -> forkbox.agent.v1.PingResponse
-	8,  // 11: forkbox.agent.v1.Response.exec_started:type_name -> forkbox.agent.v1.ExecStarted
-	9,  // 12: forkbox.agent.v1.Response.output:type_name -> forkbox.agent.v1.Output
-	10, // 13: forkbox.agent.v1.Response.exec_exit:type_name -> forkbox.agent.v1.ExecExit
-	12, // 14: forkbox.agent.v1.Response.signal:type_name -> forkbox.agent.v1.SignalResponse
-	15, // 15: forkbox.agent.v1.Response.file_header:type_name -> forkbox.agent.v1.FileHeader
-	16, // 16: forkbox.agent.v1.Response.chunk:type_name -> forkbox.agent.v1.Chunk
-	17, // 17: forkbox.agent.v1.Response.file_done:type_name -> forkbox.agent.v1.FileDone
-	19, // 18: forkbox.agent.v1.Response.stat:type_name -> forkbox.agent.v1.StatResponse
-	21, // 19: forkbox.agent.v1.Response.wait_port:type_name -> forkbox.agent.v1.WaitPortResponse
-	23, // 20: forkbox.agent.v1.Response.info:type_name -> forkbox.agent.v1.InfoResponse
-	0,  // 21: forkbox.agent.v1.Error.code:type_name -> forkbox.agent.v1.Error.Code
-	1,  // 22: forkbox.agent.v1.Output.stream:type_name -> forkbox.agent.v1.Output.Stream
-	23, // [23:23] is the sub-list for method output_type
-	23, // [23:23] is the sub-list for method input_type
-	23, // [23:23] is the sub-list for extension type_name
-	23, // [23:23] is the sub-list for extension extendee
-	0,  // [0:23] is the sub-list for field type_name
+	24, // 9: forkbox.agent.v1.Request.restored:type_name -> forkbox.agent.v1.RestoredRequest
+	4,  // 10: forkbox.agent.v1.Response.error:type_name -> forkbox.agent.v1.Error
+	6,  // 11: forkbox.agent.v1.Response.pong:type_name -> forkbox.agent.v1.PingResponse
+	8,  // 12: forkbox.agent.v1.Response.exec_started:type_name -> forkbox.agent.v1.ExecStarted
+	9,  // 13: forkbox.agent.v1.Response.output:type_name -> forkbox.agent.v1.Output
+	10, // 14: forkbox.agent.v1.Response.exec_exit:type_name -> forkbox.agent.v1.ExecExit
+	12, // 15: forkbox.agent.v1.Response.signal:type_name -> forkbox.agent.v1.SignalResponse
+	15, // 16: forkbox.agent.v1.Response.file_header:type_name -> forkbox.agent.v1.FileHeader
+	16, // 17: forkbox.agent.v1.Response.chunk:type_name -> forkbox.agent.v1.Chunk
+	17, // 18: forkbox.agent.v1.Response.file_done:type_name -> forkbox.agent.v1.FileDone
+	19, // 19: forkbox.agent.v1.Response.stat:type_name -> forkbox.agent.v1.StatResponse
+	21, // 20: forkbox.agent.v1.Response.wait_port:type_name -> forkbox.agent.v1.WaitPortResponse
+	23, // 21: forkbox.agent.v1.Response.info:type_name -> forkbox.agent.v1.InfoResponse
+	25, // 22: forkbox.agent.v1.Response.restored:type_name -> forkbox.agent.v1.RestoredResponse
+	0,  // 23: forkbox.agent.v1.Error.code:type_name -> forkbox.agent.v1.Error.Code
+	1,  // 24: forkbox.agent.v1.Output.stream:type_name -> forkbox.agent.v1.Output.Stream
+	25, // [25:25] is the sub-list for method output_type
+	25, // [25:25] is the sub-list for method input_type
+	25, // [25:25] is the sub-list for extension type_name
+	25, // [25:25] is the sub-list for extension extendee
+	0,  // [0:25] is the sub-list for field type_name
 }
 
 func init() { file_agent_proto_init() }
@@ -1856,6 +2071,7 @@ func file_agent_proto_init() {
 		(*Request_WaitPort)(nil),
 		(*Request_Info)(nil),
 		(*Request_Chunk)(nil),
+		(*Request_Restored)(nil),
 	}
 	file_agent_proto_msgTypes[1].OneofWrappers = []any{
 		(*Response_Error)(nil),
@@ -1870,6 +2086,7 @@ func file_agent_proto_init() {
 		(*Response_Stat)(nil),
 		(*Response_WaitPort)(nil),
 		(*Response_Info)(nil),
+		(*Response_Restored)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -1877,7 +2094,7 @@ func file_agent_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_agent_proto_rawDesc), len(file_agent_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   22,
+			NumMessages:   24,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

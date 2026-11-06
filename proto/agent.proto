@@ -18,6 +18,7 @@
 //   stat       -> stat
 //   wait_port  -> wait_port
 //   info       -> info
+//   restored   -> restored
 //
 // Any operation may end with `error` instead.
 syntax = "proto3";
@@ -38,6 +39,7 @@ message Request {
     InfoRequest info = 8;
     // Data frames following write_file.
     Chunk chunk = 9;
+    RestoredRequest restored = 10;
   }
 }
 
@@ -55,6 +57,7 @@ message Response {
     StatResponse stat = 10;
     WaitPortResponse wait_port = 11;
     InfoResponse info = 12;
+    RestoredResponse restored = 13;
   }
 }
 
@@ -172,4 +175,24 @@ message InfoResponse {
   uint64 uptime_ms = 4;
   int64 realtime_unix_nano = 5;
   string agent_version = 6;
+  string sandbox_id = 7; // set by the last restored call
+  uint64 generation = 8; // VM generation ID changes seen since boot
+}
+
+// Sent by the host right after a VM resumes from a snapshot. The agent makes
+// the clone distinct from its siblings: reseeds the kernel RNG with the
+// host's entropy, writes a new machine-id, sets the hostname, and steps the
+// wall clock to the host's.
+message RestoredRequest {
+  string sandbox_id = 1;
+  string hostname = 2;
+  int64 realtime_unix_nano = 3; // host clock when sent
+  bytes entropy = 4;            // random bytes from the host (up to 512)
+}
+
+message RestoredResponse {
+  int64 clock_step_ns = 1; // how far the guest clock was moved
+  string machine_id = 2;
+  uint64 generation = 3;
+  repeated string actions = 4; // what was done, for the log
 }
