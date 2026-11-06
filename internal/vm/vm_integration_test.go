@@ -4,6 +4,7 @@ package vm
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"os"
@@ -42,9 +43,11 @@ var counterRE = regexp.MustCompile(`fbx-counter (\d+)`)
 
 type kvmEnv struct {
 	m       *Manager
+	v       *versions.File
+	arch    string
 	dataDir string
 	kernel  string
-	rootfs  string
+	rootfs  string // the counter image (testInit as pid 1)
 }
 
 func newKVMEnv(t *testing.T) *kvmEnv {
@@ -69,20 +72,36 @@ func newKVMEnv(t *testing.T) *kvmEnv {
 	}
 	m, err := NewManager(Options{DataDir: dataDir, FirecrackerVersion: v.Firecracker.Version})
 	must(t, err)
-	return &kvmEnv{m: m, dataDir: dataDir, kernel: kernel, rootfs: testRootfs(t, dataDir, v, arch)}
+	e := &kvmEnv{m: m, v: v, arch: arch, dataDir: dataDir, kernel: kernel}
+	e.rootfs = e.image(t, "counter", []imageFile{{path: "/fbx-test-init", data: []byte(testInit), mode: 0o755}})
+	return e
 }
 
-// testRootfs builds the test image once per pinned rootfs, the way
-// Firecracker's getting-started guide does (unsquashfs, then mkfs.ext4 -d).
-func testRootfs(t *testing.T, dataDir string, v *versions.File, arch string) string {
+// imageFile is a file (or, with link set, a symlink) added to a test image.
+type imageFile struct {
+	path string
+	data []byte
+	mode os.FileMode
+	link string
+}
+
+// image builds a test image once per pinned rootfs and set of extra files,
+// the way Firecracker's getting-started guide does (unsquashfs, then
+// mkfs.ext4 -d). Older images of the same name are removed.
+func (e *kvmEnv) image(t *testing.T, name string, files []imageFile) string {
 	t.Helper()
-	art, ok := v.BaseRootfs.Artifacts[arch]
+	art, ok := e.v.BaseRootfs.Artifacts[e.arch]
 	if !ok {
-		t.Fatalf("versions.yaml pins no base rootfs for %s", arch)
+		t.Fatalf("versions.yaml pins no base rootfs for %s", e.arch)
 	}
-	dir := filepath.Join(dataDir, "test")
+	h := sha256.New()
+	h.Write([]byte(art.SHA256))
+	for _, f := range files {
+		fmt.Fprintf(h, "%s\x00%o\x00%s\x00%x\x00", f.path, f.mode, f.link, sha256.Sum256(f.data))
+	}
+	dir := filepath.Join(e.dataDir, "test")
 	must(t, os.MkdirAll(dir, 0o755))
-	img := filepath.Join(dir, fmt.Sprintf("counter-%s.ext4", art.SHA256[:12]))
+	img := filepath.Join(dir, fmt.Sprintf("%s-%x.ext4", name, h.Sum(nil)[:6]))
 	if _, err := os.Stat(img); err == nil {
 		return img
 	}
@@ -91,7 +110,7 @@ func testRootfs(t *testing.T, dataDir string, v *versions.File, arch string) str
 			t.Fatalf("%s not found: sudo apt install squashfs-tools e2fsprogs", tool)
 		}
 	}
-	squash := filepath.Join(dir, "base-"+v.BaseRootfs.Version+".squashfs")
+	squash := filepath.Join(dir, "base-"+e.v.BaseRootfs.Version+".squashfs")
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 	must(t, setup.FetchVerified(ctx, nil, testLog{t}, art.URL, squash, art.SHA256))
@@ -101,10 +120,22 @@ func testRootfs(t *testing.T, dataDir string, v *versions.File, arch string) str
 	defer os.RemoveAll(build)
 	root := filepath.Join(build, "root")
 	run(t, "unsquashfs", "-q", "-d", root, squash)
-	must(t, os.WriteFile(filepath.Join(root, "fbx-test-init"), []byte(testInit), 0o755))
+	for _, f := range files {
+		p := filepath.Join(root, f.path)
+		must(t, os.MkdirAll(filepath.Dir(p), 0o755))
+		if f.link != "" {
+			must(t, os.Symlink(f.link, p))
+			continue
+		}
+		must(t, os.WriteFile(p, f.data, f.mode))
+	}
 	part := filepath.Join(build, "rootfs.ext4")
 	run(t, "truncate", "-s", "1G", part)
 	run(t, "mkfs.ext4", "-q", "-d", root, "-F", part)
+	old, _ := filepath.Glob(filepath.Join(dir, name+"-*.ext4"))
+	for _, o := range old {
+		os.Remove(o)
+	}
 	must(t, os.Rename(part, img))
 	return img
 }

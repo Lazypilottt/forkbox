@@ -1,0 +1,175 @@
+// Host <-> guest agent protocol (forkbox-agent, over vsock).
+//
+// Framing: every message is a 4-byte big-endian length followed by that many
+// bytes of a serialized Request (host to guest) or Response (guest to host).
+// Frames larger than 1 MiB are refused.
+//
+// One operation per connection. The host connects, sends one Request with
+// the operation, and reads Responses until a terminal one; then either side
+// closes. Vsock connections are reset by snapshots, so nothing is kept on a
+// connection between operations, and a new connection is all a restored VM
+// needs.
+//
+//   ping       -> pong
+//   exec       -> exec_started, output*, exec_exit
+//   signal     -> signal
+//   read_file  -> file_header, chunk*, file_done
+//   write_file -> (host sends chunk* with the last one eof) -> file_done
+//   stat       -> stat
+//   wait_port  -> wait_port
+//   info       -> info
+//
+// Any operation may end with `error` instead.
+syntax = "proto3";
+
+package forkbox.agent.v1;
+
+option go_package = "github.com/Lazypilottt/forkbox/proto/agentpb";
+
+message Request {
+  oneof op {
+    PingRequest ping = 1;
+    ExecRequest exec = 2;
+    SignalRequest signal = 3;
+    ReadFileRequest read_file = 4;
+    WriteFileRequest write_file = 5;
+    StatRequest stat = 6;
+    WaitPortRequest wait_port = 7;
+    InfoRequest info = 8;
+    // Data frames following write_file.
+    Chunk chunk = 9;
+  }
+}
+
+message Response {
+  oneof msg {
+    Error error = 1;
+    PingResponse pong = 2;
+    ExecStarted exec_started = 3;
+    Output output = 4;
+    ExecExit exec_exit = 5;
+    SignalResponse signal = 6;
+    FileHeader file_header = 7;
+    Chunk chunk = 8;
+    FileDone file_done = 9;
+    StatResponse stat = 10;
+    WaitPortResponse wait_port = 11;
+    InfoResponse info = 12;
+  }
+}
+
+message Error {
+  enum Code {
+    CODE_UNSPECIFIED = 0;
+    INVALID_ARGUMENT = 1;
+    NOT_FOUND = 2;
+    PERMISSION_DENIED = 3;
+    TIMEOUT = 4;
+    INTERNAL = 5;
+  }
+  Code code = 1;
+  string message = 2;
+}
+
+message PingRequest {}
+
+message PingResponse {
+  string agent_version = 1;
+  uint32 protocol_version = 2;
+}
+
+message ExecRequest {
+  // argv[0] is looked up in PATH. Use ["sh", "-c", "..."] for a shell.
+  repeated string args = 1;
+  // "KEY=value" entries added to the agent's default environment.
+  repeated string env = 2;
+  string cwd = 3;
+  // Zero means no timeout. On timeout the whole process group is killed.
+  uint64 timeout_ms = 4;
+}
+
+message ExecStarted {
+  string exec_id = 1; // for Signal
+  int32 pid = 2;
+}
+
+message Output {
+  enum Stream {
+    STREAM_UNSPECIFIED = 0;
+    STDOUT = 1;
+    STDERR = 2;
+  }
+  Stream stream = 1;
+  bytes data = 2;
+}
+
+message ExecExit {
+  int32 exit_code = 1; // -1 when killed by a signal
+  string signal = 2;   // e.g. "killed", empty if it exited normally
+  bool timed_out = 3;
+  uint64 duration_ms = 4;
+}
+
+message SignalRequest {
+  string exec_id = 1;
+  int32 signal = 2; // Linux signal number; sent to the process group
+}
+
+message SignalResponse {}
+
+message ReadFileRequest {
+  string path = 1;
+}
+
+message WriteFileRequest {
+  string path = 1;
+  uint32 mode = 2; // permission bits; 0 means 0644
+  bool make_parents = 3;
+}
+
+message FileHeader {
+  uint64 size = 1;
+  uint32 mode = 2;
+}
+
+message Chunk {
+  bytes data = 1;
+  bool eof = 2; // last frame of a write_file upload
+}
+
+message FileDone {
+  uint64 size = 1;
+  bytes sha256 = 2;
+}
+
+message StatRequest {
+  string path = 1;
+}
+
+message StatResponse {
+  bool exists = 1;
+  uint64 size = 2;
+  uint32 mode = 3; // permission bits
+  bool is_dir = 4;
+  int64 mtime_unix_nano = 5;
+}
+
+message WaitPortRequest {
+  uint32 port = 1;
+  uint64 timeout_ms = 2;
+}
+
+message WaitPortResponse {
+  bool listening = 1;
+}
+
+message InfoRequest {}
+
+message InfoResponse {
+  string hostname = 1;
+  string machine_id = 2;
+  string boot_id = 3;
+  uint64 uptime_ms = 4;
+  int64 realtime_unix_nano = 5;
+  string agent_version = 6;
+}

@@ -4,9 +4,10 @@
 | --- | --- |
 | 1. Scaffold, `forkbox doctor` and `forkbox setup` | **Built; acceptance pending on a KVM host.** All checks that can run on macOS pass. |
 | 2. VM manager: boot, pause, snapshot, restore | **Built; acceptance pending on a KVM host.** Unit tests pass; integration tests written and skip cleanly here. |
-| 3–17 | Not started. They need a Linux KVM host. |
+| 3. Guest agent over vsock | **Built; acceptance pending on a KVM host.** Unit tests pass against the real agent; the KVM test is written and skips cleanly here. |
+| 4–17 | Not started. They need a Linux KVM host. |
 
-**Resume point:** on the KVM host, run the acceptance steps for Task 1 and then Task 2 (each entry's "How to try it"). Fix anything that fails, then start Task 3.
+**Resume point:** on the KVM host, run the acceptance steps of Tasks 1, 2 and 3 in order (each entry's "How to try it"). Fix anything that fails, then start Task 4.
 
 ---
 
@@ -266,9 +267,146 @@ a pid-1 shell loop printing `fbx-counter N` to the serial console every 100 ms.
 
 ---
 
+## Task 3. Guest agent over vsock (2026-11-06)
+
+### What the docs say (Firecracker v1.17.0)
+
+- **Host-initiated connections** (`docs/vsock.md`): connect to the VM's vsock
+  Unix socket, send `CONNECT <port>\n`, and read `OK <host port>\n`. If nothing in
+  the guest listens on the port, Firecracker closes the connection.
+- **Snapshots** (`snapshot-support.md`, "Vsock device reset"): snapshot creation
+  sends a transport reset, and on resume the guest driver closes every
+  existing connection. Listening sockets survive.
+
+### Design
+
+- **One operation per connection.** The host connects, sends one `Request`,
+  and reads `Response`s until a terminal one. No state lives on a
+  connection, so after a snapshot or a restore the next call simply dials
+  again. Concurrent Execs are independent connections.
+- **Framing:** a 4-byte big-endian length, then a protobuf message
+  (`proto/agent.proto`, generated into `proto/agentpb`). Frames over 1 MiB are
+  refused on both sides. File and output data travel in 256 KiB chunks.
+- **Bounded memory:**
+  - **Guest:** at most 8 output frames wait for the connection. When the host
+    reads slowly, the agent stops reading the pipes and the process blocks on
+    write.
+  - **Host:** `Exec`/`Wait` hand each chunk to a callback and buffer nothing.
+    `Run` collects at most 16 MiB per stream (configurable) and drops the rest
+    while still draining, so the process finishes.
+- **Process lifetime:**
+  - Each Exec runs in its own process group. A timeout or a lost connection
+    sends SIGKILL to the whole group.
+  - `Signal` targets the group, by exec id.
+  - Output from children that outlive the main process is read for 250 ms
+    after it exits.
+
+### What was built
+
+- **`proto/agent.proto`:** the operations from the task: Ping, Exec, Signal,
+  ReadFile, WriteFile, Stat, WaitPort, Info.
+- **`internal/agentwire`:** port (5250), protocol version, framing.
+- **`internal/agent`:** the guest server.
+  - **Exec:** argv, env, cwd, timeout, streamed stdout and stderr; exit code or
+    signal; a timed-out flag.
+  - **Files:** ReadFile streams the file with a SHA-256 at the end. WriteFile
+    goes to a temporary file that is renamed into place only once complete,
+    and reports a SHA-256. Paths must be absolute.
+  - **WaitPort:** reads `/proc/net/tcp{,6}` rather than connecting, so it never
+    disturbs the server it waits for.
+  - **Info:** hostname, `/etc/machine-id`, boot_id, uptime, realtime clock.
+  - **Listener:** an AF_VSOCK listener built on non-blocking `os.File`s (Go's
+    `net` package has no vsock support).
+  - **Start-up:** `SystemdUnit` starts the agent early in boot (sysinit) and
+    restarts it if it dies. `KillMode=process` keeps exec'd processes alive
+    across an agent restart.
+- **`cmd/forkbox-agent`:** a static binary (5.3 MB), built with `make agent`
+  as `bin/forkbox-agent`.
+- **`internal/vm/agentclient`:** the host client.
+  - `FirecrackerDialer` does the CONNECT handshake; a closed connection there
+    is `ErrNotListening`.
+  - Every connection attempt retries with backoff (10 ms doubling to 500 ms)
+    until the context ends. `WaitReady` also retries requests that drop
+    mid-way.
+  - Operations: `Ping`, `Start`/`Wait`, `Exec`, `Run`, `Signal`, `ReadFile`,
+    `WriteFile` (both check the SHA-256 against the agent's), `Stat`,
+    `WaitPort`, `Info`.
+  - Agent errors map to `fs.ErrNotExist`, `fs.ErrPermission` and
+    `fs.ErrInvalid`.
+- **Build:** a `make proto` target, and `make integration` now builds the
+  agent first. CI's integration step runs `make integration`.
+
+### Files
+
+`proto/agent.proto`, `proto/agentpb/agent.pb.go`, `internal/agentwire/*`,
+`internal/agent/*`, `cmd/forkbox-agent/main.go`, `internal/vm/agentclient/*`,
+`internal/vm/agent_integration_test.go`, `internal/vm/vm_integration_test.go`
+(shared image builder), `Makefile`, `.github/workflows/ci.yml`, `go.mod`
+(google.golang.org/protobuf v1.36.6).
+
+### How to try it on the KVM host
+
+```sh
+make integration      # builds bin/forkbox-agent, then runs every integration test
+# only this task:
+make agent && go test -tags integration -count=1 -exec 'sudo -n' -v -run IntegrationAgent ./internal/vm/
+```
+
+`TestIntegrationAgent` builds an image from the pinned rootfs plus the agent
+and its enabled unit, and boots a reflinked writable copy with systemd as
+init. It then checks:
+
+- echo;
+- 10 streamed lines, the first arriving within 1 s;
+- a 500 ms timeout on `sleep 30`;
+- a 50 MiB write and read-back with matching SHA-256 (times logged);
+- pause, full snapshot and resume, after which the same client works again;
+- stop, restore into a new jail with the disk as of the snapshot, and
+  resume. A client for the new socket then gets the same boot_id and
+  machine-id and the same 50 MiB file, and exec works;
+- no leftovers.
+
+### Test results (macOS arm64, Go 1.27.0)
+
+- gofmt, `go vet` and staticcheck pass for darwin and linux/amd64, with and
+  without `integration`.
+- `go test -race ./...`: 137 passed, 0 failed (21 new). The agentclient tests
+  run the real agent server behind a fake of Firecracker's vsock socket (the
+  CONNECT handshake, refusing connections while "not listening"). They cover:
+  - retry until the agent listens, and giving up at the deadline;
+  - echo; env, cwd, stderr and exit code; streaming before exit;
+  - a timeout that kills a background child too;
+  - signals; 32 concurrent execs;
+  - closing the stream kills the process;
+  - a 20 MiB output capped at 1 MiB;
+  - a 20 MiB file round trip, file errors, an aborted upload leaving no file;
+  - WaitPort; Info; a 1 GiB frame refused.
+- Mutation checks: signalling only the main pid fails the timeout test (its
+  child survives), and dropping the disconnect watcher fails the
+  close-the-stream test.
+- **Not run yet:** `TestIntegrationAgent` (KVM).
+
+### Limitations
+
+- An Exec whose connection breaks is killed, including one cut by a snapshot
+  (vsock reset). Long-lived processes should be started detached, e.g.
+  `setsid nohup ... &`, until a detached exec exists.
+- No stdin for Exec, and no TTY.
+- There is no authentication on the vsock port: anything on the host that can
+  open the VM's vsock socket is trusted. The socket lives in the root-owned
+  jail.
+- WaitPort covers TCP only.
+
+### Open questions
+
+- Should an Exec in flight across a fork survive in the parent (Task 8)? Today
+  the reset kills it.
+
+---
+
 ## Blocked
 
-- The acceptance checks of Tasks 1 and 2, and all work from Task 3 on, need a
+- The acceptance checks of Tasks 1–3, and all work from Task 4 on, need a
   Linux x86_64 KVM host.
   Apple Silicon M1 Macs have no nested virtualisation.
 
@@ -303,6 +441,7 @@ a pid-1 shell loop printing `fbx-counter N` to the serial console every 100 ms.
 - `forkbox doctor --json`.
 - Mirror the pinned kernel and rootfs to a Forkbox release.
 - Pin aarch64 artifacts.
+- Detached Exec (survives disconnects; output to a log file) and stdin/TTY support.
 - Per-VM jail uids/gids from a reserved range (Task 14 hardening).
 - Try `--enable-pci` (faster virtio) once snapshot support with PCI is confirmed.
 - Doctor checks for free space in the data dir, hugepages and address-pool
