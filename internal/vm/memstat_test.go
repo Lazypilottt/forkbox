@@ -24,3 +24,21 @@ Anonymous:         28000 kB
 		t.Error("garbage parsed")
 	}
 }
+
+func TestCmdlineNames(t *testing.T) {
+	for _, c := range []struct {
+		args []string
+		want bool
+	}{
+		{[]string{"./firecracker", "--id=sb-1", "--start-time-us=1"}, true},
+		{[]string{"./firecracker", "--id", "sb-1", "--api-sock", "/api.sock"}, true},
+		{[]string{"./firecracker", "--id", "sb-12"}, false},
+		{[]string{"./firecracker", "--id=sb-12"}, false},
+		{[]string{"sleep", "sb-1"}, false},
+		{[]string{"./firecracker", "--id"}, false},
+	} {
+		if got := cmdlineNames(c.args, "sb-1"); got != c.want {
+			t.Errorf("%q: got %v", c.args, got)
+		}
+	}
+}

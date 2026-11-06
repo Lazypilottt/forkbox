@@ -276,7 +276,7 @@ func (m *Manager) Recover(ctx context.Context) (*RecoverReport, error) {
 	var errs []error
 	for _, r := range recs {
 		known[r.ID] = true
-		if r.State == store.StateRunning && vm.Alive(r.Pid, r.ID) {
+		if r.State == store.StateRunning && m.VMs.Alive(r.Pid, r.ID) {
 			rep.Adopted = append(rep.Adopted, r.ID)
 			continue
 		}

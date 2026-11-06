@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net"
 	"os"
@@ -107,15 +108,40 @@ func assertNoSandboxLeftovers(t *testing.T, d *daemon) {
 		m, _ := filepath.Glob(g)
 		left = append(left, m...)
 	}
-	procs, _ := filepath.Glob("/proc/[0-9]*/cmdline")
-	for _, p := range procs {
-		b, _ := os.ReadFile(p)
-		if strings.Contains(string(b), "--id=sb-") {
-			left = append(left, "process "+filepath.Dir(p)+": "+strings.ReplaceAll(string(b), "\x00", " "))
-		}
+	for _, p := range sandboxProcs() {
+		left = append(left, "process "+p)
 	}
 	if len(left) > 0 {
 		t.Errorf("left behind:\n  %s", strings.Join(left, "\n  "))
+	}
+}
+
+// sandboxProcs lists jailer and Firecracker processes of sandboxes, however
+// the jailer spells the id on their command lines.
+func sandboxProcs() []string {
+	var out []string
+	procs, _ := filepath.Glob("/proc/[0-9]*/comm")
+	for _, p := range procs {
+		comm, _ := os.ReadFile(p)
+		if c := strings.TrimSpace(string(comm)); c != "firecracker" && c != "jailer" {
+			continue
+		}
+		cmd, _ := os.ReadFile(filepath.Join(filepath.Dir(p), "cmdline"))
+		if strings.Contains(string(cmd), "sb-") {
+			out = append(out, filepath.Dir(p)+": "+strings.ReplaceAll(string(cmd), "\x00", " "))
+		}
+	}
+	return out
+}
+
+func waitFor(t *testing.T, what string, cond func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(15 * time.Second)
+	for !cond() {
+		if time.Now().After(deadline) {
+			t.Fatalf("timed out waiting for %s", what)
+		}
+		time.Sleep(2 * time.Millisecond)
 	}
 }
 
@@ -149,13 +175,42 @@ func TestIntegrationDaemonSocketsAreOwnerOnly(t *testing.T) {
 	}
 }
 
-// Kill the daemon at several points of a create, restart it, and check the
-// reaper leaves nothing behind.
+// Kill the daemon at each phase of a create (record written, VM process
+// running, agent being reached, done), restart it, and check the reaper
+// leaves nothing behind.
 func TestIntegrationDaemonKilledMidCreate(t *testing.T) {
-	for _, delay := range []time.Duration{0, 5 * time.Millisecond, 15 * time.Millisecond, 30 * time.Millisecond, 50 * time.Millisecond, 80 * time.Millisecond} {
+	data := datadir.FromEnv()
+	exists := func(glob string) func() bool {
+		return func() bool { m, _ := filepath.Glob(glob); return len(m) > 0 }
+	}
+	phases := []struct {
+		name  string
+		ready func() bool
+		extra time.Duration
+	}{
+		{"before anything", func() bool { return true }, 0},
+		{"record and disk", exists(filepath.Join(data, "sandboxes", "sb-*", "rootfs.ext4")), 0},
+		{"jail", exists(filepath.Join(data, "jail", "firecracker", "sb-*")), 0},
+		{"vm running", func() bool { return len(sandboxProcs()) > 0 }, 0},
+		{"agent wait", func() bool { return len(sandboxProcs()) > 0 }, 15 * time.Millisecond},
+		{"finished", nil, 0},
+	}
+	for _, ph := range phases {
 		d := startDaemon(t)
-		go d.c.CreateSandbox(context.Background(), &pb.CreateSandboxRequest{Template: "python"})
-		time.Sleep(delay)
+		done := make(chan error, 1)
+		go func() {
+			_, err := d.c.CreateSandbox(context.Background(), &pb.CreateSandboxRequest{Template: "python"})
+			done <- err
+		}()
+		if ph.ready == nil {
+			if err := <-done; err != nil {
+				t.Fatal(err)
+			}
+		} else {
+			waitFor(t, ph.name, ph.ready)
+			time.Sleep(ph.extra)
+		}
+		procsBefore := len(sandboxProcs())
 		d.kill()
 
 		d = startDaemon(t)
@@ -164,17 +219,22 @@ func TestIntegrationDaemonKilledMidCreate(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		// A create that finished before the kill is adopted and must work;
-		// clean it up through the API.
+		// A create that finished before the kill is adopted and must work.
 		for _, sb := range list.Sandboxes {
 			if sb.State != "running" {
-				t.Errorf("delay %s: %s left in state %s", delay, sb.Id, sb.State)
+				t.Errorf("%s: %s left in state %s", ph.name, sb.Id, sb.State)
+			}
+			if out := execOut(t, d, sb.Id, "echo adopted"); out != "adopted\n" {
+				t.Errorf("%s: adopted %s answered %q", ph.name, sb.Id, out)
 			}
 			if _, err := d.c.DestroySandbox(ctx, &pb.DestroySandboxRequest{Id: sb.Id}); err != nil {
 				t.Errorf("destroy adopted %s: %v", sb.Id, err)
 			}
 		}
-		t.Logf("delay %s: %d sandboxes survived and were adopted", delay, len(list.Sandboxes))
+		t.Logf("killed at %-15s: %d VM processes at kill, %d sandboxes adopted after restart", ph.name, procsBefore, len(list.Sandboxes))
+		if ph.name == "finished" && len(list.Sandboxes) != 1 {
+			t.Errorf("a finished sandbox was not adopted; daemon log:\n%s", readLog(d.log.Name()))
+		}
 		d.stop()
 		assertNoSandboxLeftovers(t, d)
 	}
@@ -203,12 +263,15 @@ func TestIntegrationDaemonKilledMidExec(t *testing.T) {
 		}
 	}
 	d.kill()
+	cmdline, _ := os.ReadFile(fmt.Sprintf("/proc/%d/cmdline", sb.Pid))
+	cg, _ := os.ReadFile(fmt.Sprintf("/proc/%d/cgroup", sb.Pid))
+	t.Logf("after the kill, pid %d: cmdline %q cgroup %q", sb.Pid, cmdline, cg)
 
 	d = startDaemon(t)
 	defer func() { d.stop(); assertNoSandboxLeftovers(t, d) }()
 	got, err := d.c.GetSandbox(ctx, &pb.GetSandboxRequest{Id: sb.Id})
 	if err != nil || got.State != "running" {
-		t.Fatalf("sandbox after restart: %v %v", got, err)
+		t.Fatalf("sandbox after restart: %v %v; daemon log:\n%s", got, err, readLog(d.log.Name()))
 	}
 	// The guest killed the orphaned command when its stream went away.
 	deadline := time.Now().Add(10 * time.Second)

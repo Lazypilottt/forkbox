@@ -277,7 +277,7 @@ func (m *Manager) Reap(id string) error {
 	if err := m.cg.remove(id, m.o.CleanupTimeout); err != nil {
 		errs = append(errs, err)
 	}
-	if pid := readPidFile(filepath.Join(l.chroot(), execFileName+".pid")); pid > 0 && isJailedFirecracker(pid, id) {
+	if pid := readPidFile(filepath.Join(l.chroot(), execFileName+".pid")); pid > 0 && m.isJailedFirecracker(pid, id) {
 		_ = syscall.Kill(pid, syscall.SIGKILL)
 	}
 	if err := os.RemoveAll(l.jailDir()); err != nil {
@@ -341,19 +341,35 @@ func readPidFile(path string) int {
 	return pid
 }
 
-// Alive reports whether pid is the jailed Firecracker of VM id (and not a
+// Alive reports whether pid is still VM id's Firecracker (and not a
 // recycled pid).
-func Alive(pid int, id string) bool { return pid > 0 && isJailedFirecracker(pid, id) }
+func (m *Manager) Alive(pid int, id string) bool {
+	return pid > 0 && m.isJailedFirecracker(pid, id)
+}
 
-// isJailedFirecracker guards against pid reuse: the jailer passes --id=<id>
-// to Firecracker, so its command line names the VM.
-func isJailedFirecracker(pid int, id string) bool {
+// isJailedFirecracker guards against pid reuse. The jailer puts Firecracker
+// in the VM's own cgroup (<parent>/<id>), which no unrelated process can be
+// in; the command line, which names the VM, is a fallback for cgroup v1
+// hosts and accepts both "--id=<id>" and "--id <id>".
+func (m *Manager) isJailedFirecracker(pid int, id string) bool {
+	if b, err := os.ReadFile(fmt.Sprintf("/proc/%d/cgroup", pid)); err == nil {
+		want := "/" + m.o.CgroupParent + "/" + id
+		for _, line := range strings.Split(strings.TrimSpace(string(b)), "\n") {
+			if p, ok := strings.CutPrefix(line, "0::"); ok && p == want {
+				return true
+			}
+		}
+	}
 	b, err := os.ReadFile(fmt.Sprintf("/proc/%d/cmdline", pid))
 	if err != nil {
 		return false
 	}
-	for _, a := range splitNul(b) {
-		if a == "--id="+id {
+	return cmdlineNames(splitNul(b), id)
+}
+
+func cmdlineNames(args []string, id string) bool {
+	for i, a := range args {
+		if a == "--id="+id || (a == "--id" && i+1 < len(args) && args[i+1] == id) {
 			return true
 		}
 	}

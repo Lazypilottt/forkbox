@@ -5,9 +5,13 @@
 | 1. Scaffold, `forkbox doctor` and `forkbox setup` | **Done.** Accepted on a KVM host (CI run 42142883146). |
 | 2. VM manager: boot, pause, snapshot, restore | **Done.** Accepted on a KVM host (CI run 42142883146). |
 | 3. Guest agent over vsock | **Done.** Accepted on a KVM host (CI run 42142883146). |
-| 4–17 | Not started. |
+| 4. Template builder and base snapshot | **Done.** Accepted on a KVM host (CI runs 42204743833, 42205629650). |
+| 5. Create from template, with basic clone correctness | **Done.** Accepted on a KVM host (CI run 42206377901). |
+| 6. Daemon API, Python SDK and the first benchmark | **Done.** Accepted on a KVM host (CI run 42208149355). |
+| v0.1 release review | In progress (see below). |
+| 7–17 | Not started. |
 
-**Resume point:** Task 4. Every push runs the integration tests on real
+**Resume point:** the v0.1 release review, then Task 7. Every push runs the integration tests on real
 Firecracker microVMs (see "KVM host" below).
 
 ## KVM host
@@ -457,6 +461,244 @@ init. It then checks:
 
 ---
 
+## Task 4. Template builder and base snapshot (2026-11-06)
+
+### What was built
+
+- **Spec** (`internal/template/spec.go`, strict YAML):
+  - Fields: `name`, `base` (an OCI image reference), `apt`, `pip`, `files`,
+    `env`, `warm_up`, `vcpus`, `memory_mib`, `disk_size_mib`.
+  - Package names are checked against a package-name pattern and always
+    passed as separate arguments, never through a shell.
+- **Template id:** `tpl-` + 20 hex digits of SHA-256 over:
+  - the spec, with copied files by content rather than by path;
+  - `versions.yaml`;
+  - the agent binary.
+
+  The task asked for the spec plus `versions.yaml`. The agent goes into
+  every image, so it is in the id too: a new agent builds a new template.
+- **Build steps** (`internal/template/build.go`); each one is timed into
+  `template.json`:
+  1. **Pull and flatten** the image with go-containerregistry, in pure Go
+     (see "Why go-containerregistry" below).
+  2. **Extract** it as root through an `os.Root`, so neither `..` names nor
+     symlinks in the image can write outside the staging directory. It keeps
+     owners, modes (setuid included), hard links and xattrs. Device nodes are
+     skipped; the guest's `/dev` is devtmpfs.
+  3. **Install packages:** `apt-get install --no-install-recommends` and
+     `pip install`, run with `chroot` inside `unshare --mount --propagation
+     private`, so the bind mounts vanish with the process even if the build
+     is killed. The host's `resolv.conf` and a `policy-rc.d` are in place
+     during this step and removed afterwards. The apt lists are cleaned.
+  4. **Copy the spec's files.**
+  5. **Install the agent** as `/usr/local/bin/forkbox-agent`, with
+     `/etc/forkbox/agent.json` holding the image's env, the spec's env and
+     the image's working directory, and `/etc/hostname`.
+  6. **Make the filesystem:** `mkfs.ext4 -d` at `disk_size_mib`.
+  7. **Boot** with `init=/usr/local/bin/forkbox-agent`, wait for the agent's
+     Ping, and run each `warm_up` command through the agent (a non-zero exit
+     fails the build).
+  8. **Snapshot:** pause and take a full snapshot.
+- **Agent as PID 1** (`internal/agent/init_linux.go`), for images without an
+  init system. It mounts `/proc`, `/sys`, devtmpfs, devpts, `/dev/shm` and
+  `/run`, brings up loopback, runs the agent server as a child, reaps
+  orphans, and restarts the server if it dies.
+- **Storage:** `<data>/templates/<id>/` holds `template.json`, `rootfs.ext4`
+  (0444), `snapshot/{vmstate,mem}` (`root:<jail gid>` 0440, so jailed VMs can
+  map the memory) and `build.log`. Builds happen in `.build-<id>`, are
+  renamed into place only once complete, and are serialised per id by a lock.
+- **CLI:** `forkbox templates build SPEC [--force]`, `list`,
+  `inspect NAME|ID [--json]`, `rm NAME|ID`.
+- **Templates:** `templates/python.yaml` (Python 3.12, git, build-essential,
+  numpy, pytest; the warm-up imports numpy) and `templates/node.yaml`
+  (Node 22).
+
+### Why go-containerregistry
+
+It verifies layer digests, applies whiteouts and needs no daemon, skopeo or
+umoci on the host. `docker export` would need a container runtime;
+skopeo+umoci is two more host tools. The cost is anonymous pulls only;
+registry auth is under Ideas.
+
+### Results on the KVM host
+
+| template | build | packages | mkfs | boot+warm_up+snapshot | rootfs (allocated) | memory |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| python | 38.3 s | 20.6 s | 8.2 s | 6.6 s | 644.5 MiB | 512 MiB |
+| node | 22.8 s | n/a | n/a | n/a | 399.7 MiB | 512 MiB |
+
+- An unchanged rebuild printed `is up to date` and took under 5 s (the CI step
+  checks both).
+- `inspect` shows sizes (allocated and apparent) and per-step build times.
+- `TestIntegrationBuildTiny` builds `debian:bookworm-slim` with a file and an
+  env in 11.8 s. It then checks the no-op rebuild and read-only modes, and
+  restores a VM from the snapshot: the guest reported the file, the env, the
+  hostname and `forkbox-agent` as PID 1.
+- **Bug found and fixed (`b85c5c8`):** the first run failed to restore. A
+  reflink of the 0444 template disk kept its mode, so the jail user owned the
+  drive but could not open it read-write. The VM manager now makes a writable
+  root drive 0600.
+
+### Limitations
+
+- `base` must be an OCI image; debootstrap bases are not supported.
+- Anonymous registry pulls only.
+- A tag is resolved at build time and is not re-resolved for an unchanged
+  spec. Pin a digest for exact rebuilds.
+- Package install runs the image's maintainer scripts as root on the host
+  (in a chroot), so specs are trusted operator input.
+
+---
+
+## Task 5. Create from template, with basic clone correctness (2026-11-06)
+
+### Docs
+
+- **`random-for-clones.md`:**
+  - Linux 5.18+ reseeds its CRNG when the vmgenid driver sees a new VM
+    generation ID, but there is a window before that.
+  - The recommendation is `RNDADDENTROPY` plus `RNDRESEEDCRNG` before user
+    code runs.
+  - `boot_id` stays the same in every clone.
+- **`snapshot-support.md`:**
+  - A File-backed restore maps the memory file `MAP_PRIVATE`.
+  - Confirmed in the source: `src/vmm/src/vstate/memory.rs`,
+    `snapshot_file()` passes `libc::MAP_PRIVATE`.
+
+### What was built
+
+- **`internal/sandbox`, `Create`:**
+  1. Insert the record (state `creating`).
+  2. Reflink the template rootfs into `<data>/sandboxes/<id>/rootfs.ext4`; if
+     the filesystem cannot reflink, a clear error that names
+     `forkbox doctor`.
+  3. Restore in a fresh jail, with the File backend on the template's
+     read-only memory file.
+  4. Resume.
+  5. Wait for the agent.
+  6. Call the agent's new `Restored` operation.
+  7. Record the VM's pid and set the state to `running`.
+
+  On any failure everything is removed.
+- **Agent `Restored`:**
+  - steps `CLOCK_REALTIME` to the host time sent in the request;
+  - runs `RNDADDENTROPY` with 64 bytes from the host plus 64 local bytes,
+    then `RNDRESEEDCRNG`;
+  - writes a new random `/etc/machine-id`;
+  - sets the hostname to the sandbox id;
+  - returns what it did.
+
+  A netlink uevent watcher also reseeds and writes a new machine-id on
+  `NEW_VMGENID=1`. `Info` now reports the sandbox id and how many generation
+  changes the agent has seen.
+- **`internal/store`:** SQLite in WAL mode, via pure-Go modernc.org/sqlite so
+  the daemon stays static, with `user_version` migrations. The sandbox record
+  holds id, template, parent, state, paths, cgroup, pid, created_at and ttl.
+- **`vm.ReadMemStats`:** reads `/proc/<pid>/smaps_rollup`.
+
+### Results on the KVM host (`TestIntegrationCreateTwenty`)
+
+- 20 sandboxes from the python template:
+  - create took 68 ms min, **74.8 ms p50**, 148 ms max (restore to agent
+    ready and identity done);
+  - each answered exec;
+  - kernel random bytes, machine-id and hostname all differed.
+- Clocks were within 1 s of the host. The agent stepped the clock forward
+  39 s, the age of the template snapshot.
+- Memory per Firecracker process: about 80 MiB RSS, of which about 68 MiB
+  was shared, and **15.1 MiB PSS**. The 20 sandboxes total 302 MiB PSS, with
+  512 MiB of guest memory each.
+
+### Open questions
+
+- **VM generation changes:** the agent had seen 0 when `Restored` ran.
+  Either the 6.18 CI kernel lacks the vmgenid driver, or the uevent arrives
+  later. The host-driven reseed covers it either way. Task 10 checks which.
+
+---
+
+## Task 6. Daemon API, Python SDK and the first benchmark (2026-11-06)
+
+### What was built
+
+- **`proto/forkbox.proto`:** `CreateSandbox` (returns per-step timings),
+  `GetSandbox`, `ListSandboxes`, `Exec` (server streaming), `ReadFile`
+  (server streaming, with size and SHA-256 at the end), `WriteFile` (client
+  streaming) and `DestroySandbox`. The error codes are documented in the
+  file: NOT_FOUND, INVALID_ARGUMENT, FAILED_PRECONDITION, ALREADY_EXISTS,
+  RESOURCE_EXHAUSTED, DEADLINE_EXCEEDED, UNAVAILABLE, UNAUTHENTICATED,
+  INTERNAL.
+- **`internal/api`:**
+  - The gRPC server works through a `Backend` interface.
+  - An HTTP gateway: JSON (protojson), server-sent events for exec, raw bytes
+    for files, and errors as `{code, message}` with a matching HTTP status.
+  - A bearer token for TCP listeners, compared in constant time.
+- **`forkboxd`:**
+  - gRPC on `<data>/run/forkboxd.sock` and the HTTP gateway on
+    `forkboxd-http.sock`; both sockets are 0600 in a 0700 run directory;
+  - `--grpc-tcp` and `--http-tcp` with `--token-file`, off by default;
+  - a single-instance lock;
+  - startup recovery (`sandbox.Recover`): it adopts sandboxes whose
+    Firecracker process is alive (pid checked against `--id=`), reaps the
+    rest, and removes `sb-*` jails, cgroups and directories that have no
+    record;
+  - a TTL sweeper.
+
+  SIGTERM leaves sandboxes running; the next start adopts them.
+- **`sdk/python`** (package `forkbox`, Python 3.12, grpcio 1.85.1, protobuf
+  7.35.1+):
+  - `Sandbox.create(template, ttl)`, `get`, `list`;
+  - `exec` returns an `ExecResult` (`stdout`, `stderr`, `exit_code`, `ok`,
+    `check=True`), and `exec_stream` yields typed events (stopping early
+    kills the command);
+  - `fs.read`, `read_text`, `write` and `upload`, all checksum-verified;
+  - `destroy` and context-manager use;
+  - typed errors per code.
+
+  The generated stubs are committed (`make proto`).
+- **Python tests:** 11 unit tests against an in-process fake daemon, plus 4
+  integration tests against the real one. A test keeps the README quick start
+  identical to `examples/quickstart.py`, which CI runs.
+- **`bench/restore.py`:** results go to `bench/results/`.
+
+### Results on the KVM host
+
+- The SDK integration tests passed (end to end, unknown template, 5 parallel
+  creates with distinct machine-ids, TTL expiry).
+- The README quick start ran: `sandbox ... ready in 69 ms`, `0 45`, three
+  ticks, `hello from the sandbox`.
+- `bench/restore.py --runs 100`
+  (`bench/results/restore-20261106T111538Z.md`):
+
+### restore: template `python`, 100 runs, up to 10 alive
+
+Host: Intel Xeon Platinum 8370C @ 2.80GHz (2 CPUs), 7.7 GiB RAM, kernel 7.0.0-1017-azure,
+virtualization microsoft (nested), Firecracker v1.17.0, data dir on xfs.
+
+| metric | p50 | p95 | min | max | mean | stdev |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| create to first exec (ms) | 105.3 | 113.8 | 94.0 | 134.6 | 106.0 | 5.5 |
+| daemon create (ms) | 74.6 | 80.9 | 60.7 | 104.0 | 74.8 | 5.1 |
+|   disk (ms) | 0.4 | 1.0 | 0.3 | 2.3 | 0.5 | 0.3 |
+|   restore (ms) | 15.3 | 16.9 | 9.3 | 18.0 | 14.8 | 2.0 |
+|   resume (ms) | 2.3 | 4.7 | 0.4 | 6.2 | 2.5 | 1.3 |
+|   agent (ms) | 23.8 | 27.3 | 18.1 | 36.8 | 23.6 | 2.6 |
+|   identity (ms) | 31.9 | 36.6 | 23.7 | 55.3 | 32.8 | 3.7 |
+| Firecracker RSS (MiB) | 32.3 | 32.6 | 31.8 | 32.8 | 32.3 | 0.2 |
+| Firecracker PSS (MiB) | 8.8 | 10.8 | 8.6 | 32.4 | 9.3 | 2.7 |
+
+The PSS max of 32.4 MiB is the first sandbox, when it was the only one
+mapping the template. These are nested-virtualization numbers on 2 vCPUs.
+
+### Limitations
+
+- The sockets are root-only. A non-root user needs the TCP listener and a
+  token.
+- The gRPC API has no fork or checkpoint yet (Tasks 8 and 9).
+- The `identity` step (32 ms) is the largest part of a create; see Ideas.
+
+---
+
 ## Blocked
 
 Nothing.
@@ -478,6 +720,8 @@ Nothing.
 - `forkbox doctor --json`.
 - Mirror the pinned kernel and rootfs to a Forkbox release.
 - Pin aarch64 artifacts.
+- Speed up the post-restore identity step (32 ms): one round trip, and the machine-id written in the background.
+- Registry auth for private base images; debootstrap bases.
 - Detached Exec (survives disconnects; output to a log file) and stdin/TTY support.
 - Per-VM jail uids/gids from a reserved range (Task 14 hardening).
 - Try `--enable-pci` (faster virtio) once snapshot support with PCI is confirmed.
