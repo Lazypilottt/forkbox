@@ -174,6 +174,18 @@ func TestIntegrationBootReachesInit(t *testing.T) {
 			t.Errorf("/proc/%d/status lacks %q", v.Pid(), want)
 		}
 	}
+	// Its root is the jail: the jail's files are there, the host's are not.
+	jailRoot := fmt.Sprintf("/proc/%d/root", v.Pid())
+	for _, p := range []string{"api.sock", "firecracker", "boot/vmlinux", "drives/rootfs", "dev/kvm"} {
+		if _, err := os.Stat(filepath.Join(jailRoot, p)); err != nil {
+			t.Errorf("jail root lacks %s: %v", p, err)
+		}
+	}
+	for _, p := range []string{"etc", "usr", "proc", "var"} {
+		if _, err := os.Stat(filepath.Join(jailRoot, p)); err == nil {
+			t.Errorf("jail root has the host's /%s", p)
+		}
+	}
 	cg := readFile(t, fmt.Sprintf("/proc/%d/cgroup", v.Pid()))
 	if want := "0::/" + DefaultCgroupParent + "/" + id; !strings.Contains(cg, want) {
 		t.Errorf("cgroup = %q, want %q", cg, want)

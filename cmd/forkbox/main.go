@@ -19,7 +19,7 @@ import (
 )
 
 // version is set at release time with -ldflags "-X main.version=...".
-var version = "0.0.0-dev"
+var version = "0.1.0"
 
 const usage = `forkbox is the operator CLI for Forkbox, forkable Firecracker sandboxes.
 

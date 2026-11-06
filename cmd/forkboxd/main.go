@@ -26,7 +26,7 @@ import (
 	"github.com/Lazypilottt/forkbox/internal/vm"
 )
 
-var version = "0.0.0-dev"
+var version = "0.1.0"
 
 // Paths inside the data directory.
 const (

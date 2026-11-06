@@ -17,7 +17,7 @@ import (
 )
 
 // version is set at build time: -ldflags "-X main.version=..."
-var version = "dev"
+var version = "0.1.0"
 
 func main() {
 	port := flag.Uint("port", agentwire.Port, "vsock port to listen on")

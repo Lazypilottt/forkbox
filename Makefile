@@ -36,5 +36,5 @@ check:
 	go test ./...
 
 # On the KVM host. Test binaries run as root (jailer, cgroups, namespaces).
-integration: agent
+integration: build
 	go test -tags integration -count=1 -p 1 $(GOTESTFLAGS) -exec 'sudo -n' ./...
