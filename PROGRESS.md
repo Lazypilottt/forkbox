@@ -2,12 +2,37 @@
 
 | Task | Status |
 | --- | --- |
-| 1. Scaffold, `forkbox doctor` and `forkbox setup` | **Built; acceptance pending on a KVM host.** All checks that can run on macOS pass. |
-| 2. VM manager: boot, pause, snapshot, restore | **Built; acceptance pending on a KVM host.** Unit tests pass; integration tests written and skip cleanly here. |
-| 3. Guest agent over vsock | **Built; acceptance pending on a KVM host.** Unit tests pass against the real agent; the KVM test is written and skips cleanly here. |
-| 4–17 | Not started. They need a Linux KVM host. |
+| 1. Scaffold, `forkbox doctor` and `forkbox setup` | **Done.** Accepted on a KVM host (CI run 42142883146). |
+| 2. VM manager: boot, pause, snapshot, restore | **Done.** Accepted on a KVM host (CI run 42142883146). |
+| 3. Guest agent over vsock | **Done.** Accepted on a KVM host (CI run 42142883146). |
+| 4–17 | Not started. |
 
-**Resume point:** on the KVM host, run the acceptance steps of Tasks 1, 2 and 3 in order (each entry's "How to try it"). Fix anything that fails, then start Task 4.
+**Resume point:** Task 4. Every push runs the integration tests on real
+Firecracker microVMs (see "KVM host" below).
+
+## KVM host
+
+The integration job in `.github/workflows/ci.yml` runs on GitHub's hosted
+`ubuntu-24.04` runners, which expose hardware virtualization. The job:
+
+- grants access to `/dev/kvm` with a udev rule;
+- installs `squashfs-tools`, `e2fsprogs`, `xfsprogs` and `nftables`;
+- mounts a 24 GB sparse loop file formatted XFS (`-m reflink=1`) at
+  `/var/lib/forkbox`;
+- runs `forkbox setup`, `forkbox doctor`, `make integration` (verbose), and
+  the container check.
+
+It can also be started by hand: `gh workflow run ci`.
+
+Runner as of 2026-11-06:
+
+- 2 vCPUs, 7.7 GB RAM, Ubuntu 24.04.5, host kernel 7.0.0-1017-azure.
+- It is an Azure VM, so microVMs run under **nested virtualization**.
+- Host kernel 7.0 is newer than the host kernels Firecracker v1.17 validates.
+
+Timings from these runners are fine for regressions but are **not**
+benchmark numbers for the README. Task 6 and Task 16 benchmarks need a
+bare-metal or larger host, recorded with the Firecracker version.
 
 ---
 
@@ -86,8 +111,14 @@ docker run --rm -v "$PWD/bin/forkbox-static:/forkbox:ro" ubuntu:24.04 /forkbox d
 - gofmt, `go vet` and staticcheck pass, also with `GOOS=linux GOARCH=amd64`.
 - `go test ./...`: 98 passed, 0 failed (counting subtests).
 - `forkbox doctor` on macOS: 11 FAIL with the platform fix shown, exit 1.
-- **Not run yet:** the Linux-only storage tests, the KVM integration test and
-  the container check.
+- **On the KVM host (CI run 42142883146):**
+  - `forkbox setup` installed and verified all pins;
+  - `forkbox doctor` reported 11 passed, 0 failed, and `TestDoctorPassesOnThisHost`
+    passed;
+  - the Linux-only storage tests passed;
+  - in an `ubuntu:24.04` container without `/dev/kvm`, doctor exited 1 with
+    `FAIL kvm /dev/kvm does not exist inside this container` and the fix
+    `docker run --device /dev/kvm ...`.
 
 ### Limitations
 
@@ -243,7 +274,17 @@ a pid-1 shell loop printing `fbx-counter N` to the serial console every 100 ms.
   - cleanup after an API error, a timeout and an early exit;
   - `Reap` writing `cgroup.kill`.
 - A mutation check (turning off `track_dirty_pages`) fails the tests as expected.
-- **Not run yet:** the three KVM integration tests.
+- **On the KVM host (CI run 42142883146):** all three integration tests passed.
+  - Boot to InstanceStart took 29.8 ms: jail 12.5, configure 1.4, start 15.9.
+    The console reached `fbx-test-init: started`. Firecracker ran as uid/gid
+    70000 with `Seccomp: 2` in cgroup `/forkbox/<id>`.
+  - Snapshot test: pause 0.7 ms, full snapshot of 256 MiB 1093 ms, restore
+    17.9 ms (jail 11.5, load 6.4), resume 6.8 ms. The counter was 10 at
+    snapshot and the first line after restore was 11, so the guest resumed
+    rather than rebooted.
+  - Bad kernel, SIGKILLed Firecracker and lost owner all left no process,
+    jail, run dir or cgroup.
+  - These are nested-virtualization numbers on 2 vCPUs (see "KVM host").
 
 ### Limitations
 
@@ -384,7 +425,19 @@ init. It then checks:
 - Mutation checks: signalling only the main pid fails the timeout test (its
   child survives), and dropping the disconnect watcher fails the
   close-the-stream test.
-- **Not run yet:** `TestIntegrationAgent` (KVM).
+- **On the KVM host (CI run 42142883146):** `TestIntegrationAgent` passed.
+  - The agent answered 2.19 s after InstanceStart (systemd boot).
+  - echo, 10 streamed lines and the 500 ms timeout behaved as expected.
+  - 50 MiB went up in 439 ms and down in 342 ms, with checksums matching.
+  - After pause, snapshot and resume, the same client was back in 15 ms.
+  - After a restore into a new jail, a new client got an answer 60 ms after
+    resume, with the same boot_id and machine-id and the 50 MiB file intact.
+- **Bug found by the first KVM run (run 42139491026), fixed in `56d7653`.**
+  When the agent refused an upload at once, the client hit a broken pipe,
+  hung up, and lost the agent's error frame, so the caller saw "broken pipe"
+  instead of `fs.ErrNotExist`. The client now reads the agent's answer before
+  hanging up, unless its own source failed. `TestFileErrors` now uses a
+  32 MiB upload, so the early hang-up reliably happens mid-upload.
 
 ### Limitations
 
@@ -406,35 +459,19 @@ init. It then checks:
 
 ## Blocked
 
-- The acceptance checks of Tasks 1–3, and all work from Task 4 on, need a
-  Linux x86_64 KVM host.
-  Apple Silicon M1 Macs have no nested virtualisation.
+Nothing.
 
 ## TODO (manual)
 
-1. **KVM host:**
+1. **Before the benchmarks (Tasks 6, 11, 16):** a bare-metal or larger x86_64
+   KVM host. The CI runners are nested-virtualized with 2 vCPUs.
    - Ubuntu 24.04, at least 8 vCPUs and 16 GB RAM;
-   - XFS (`mkfs.xfs -m reflink=1`) or btrfs mounted at `/var/lib/forkbox`.
+   - XFS (`mkfs.xfs -m reflink=1`) or btrfs at `/var/lib/forkbox`;
+   - `squashfs-tools`, `e2fsprogs`.
 
-   Install `squashfs-tools` and `e2fsprogs` (the Task 2 integration test
-   builds its rootfs with them). Clone the repo there and run the steps above.
-2. **Register the host as the `kvm` runner.**
-   1. On GitHub: repo → Settings → Actions → Runners → New self-hosted runner →
-      Linux x64. Run the download commands it shows, as a dedicated user
-      `runner`.
-   2. Configure and install the service:
-      ```sh
-      ./config.sh --url https://github.com/Lazypilottt/forkbox --token <TOKEN> \
-          --name forkbox-kvm --labels kvm --unattended
-      sudo ./svc.sh install runner && sudo ./svc.sh start
-      ```
-   3. Give `runner` passwordless sudo; CI uses `sudo -n`:
-      ```sh
-      echo 'runner ALL=(root) NOPASSWD: ALL' | sudo tee /etc/sudoers.d/forkbox-runner
-      sudo chmod 0440 /etc/sudoers.d/forkbox-runner && sudo visudo -c
-      ```
-   4. If the repo is ever made public, enable "Require approval for all
-      external contributors".
+   Not needed before then.
+2. **Actions minutes:** the unit job takes about 30 s and the integration job about 1.5 minutes per push, both
+   is billed to the account's private-repo minutes.
 
 ## Ideas
 
