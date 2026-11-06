@@ -1,4 +1,5 @@
 STATICCHECK_VERSION ?= 2026.2.2
+GOTESTFLAGS ?=
 
 .PHONY: build agent proto check integration fmt
 
@@ -26,4 +27,4 @@ check:
 
 # On the KVM host. Test binaries run as root (jailer, cgroups, namespaces).
 integration: agent
-	go test -tags integration -count=1 -exec 'sudo -n' ./...
+	go test -tags integration -count=1 $(GOTESTFLAGS) -exec 'sudo -n' ./...

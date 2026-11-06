@@ -3,6 +3,7 @@ name: ci
 on:
   push:
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -37,30 +38,59 @@ jobs:
           python3 -m pytest sdk/python
 
   integration:
-    name: integration tests (KVM host)
+    name: integration tests (KVM)
     needs: unit
-    # Only on the dedicated self-hosted runner with the `kvm` label.
-    runs-on: [self-hosted, linux, kvm]
-    # Never run code from forked pull requests on the self-hosted runner.
-    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
-    # One KVM host: run one integration job at a time.
-    concurrency:
-      group: kvm-host
-      cancel-in-progress: false
-    timeout-minutes: 60
+    # GitHub's standard Linux runners expose hardware virtualization; the
+    # job grants access to /dev/kvm and runs real Firecracker microVMs.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
-          cache: false
-      - name: build forkbox
-        run: go build -o "$RUNNER_TEMP/forkbox" ./cmd/forkbox
+      - name: host
+        run: |
+          uname -a; nproc; free -h; df -h / /mnt 2>/dev/null || true
+          grep -cwE 'vmx|svm' /proc/cpuinfo || echo "no vmx/svm flags"
+          ls -l /dev/kvm || true
+          cat /sys/fs/cgroup/cgroup.subtree_control
+      - name: enable /dev/kvm
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          ls -l /dev/kvm
+      - name: host tools
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends squashfs-tools e2fsprogs xfsprogs nftables
+      - name: data dir on reflink XFS
+        run: |
+          # A sparse loop file on whichever disk has more room.
+          dir=/mnt
+          if [ "$(df --output=avail -B1 / | tail -1)" -gt "$(df --output=avail -B1 /mnt 2>/dev/null | tail -1 || echo 0)" ]; then dir=/var/tmp; fi
+          sudo truncate -s 24G "$dir/forkbox-data.img"
+          sudo mkfs.xfs -q -m reflink=1 "$dir/forkbox-data.img"
+          sudo mkdir -p /var/lib/forkbox
+          sudo mount -o loop "$dir/forkbox-data.img" /var/lib/forkbox
+          df -hT /var/lib/forkbox
       - name: forkbox setup
-        run: sudo -n "$RUNNER_TEMP/forkbox" setup
+        run: |
+          go build -o bin/forkbox ./cmd/forkbox
+          sudo -n bin/forkbox setup
       - name: forkbox doctor
-        run: sudo -n "$RUNNER_TEMP/forkbox" doctor
-      # Test binaries are built as the runner user and run as root, which the
-      # jailer, cgroups and network namespaces need.
+        run: sudo -n bin/forkbox doctor
       - name: integration tests
-        run: make integration
+        run: make integration GOTESTFLAGS="-v -timeout 30m"
+      - name: doctor in a container without /dev/kvm
+        run: |
+          CGO_ENABLED=0 go build -o bin/forkbox-static ./cmd/forkbox
+          set +e
+          out=$(docker run --rm -v "$PWD/bin/forkbox-static:/forkbox:ro" ubuntu:24.04 /forkbox doctor 2>&1)
+          code=$?
+          set -e
+          echo "$out"
+          test "$code" -eq 1
+          echo "$out" | grep -q '/dev/kvm does not exist inside this container'
