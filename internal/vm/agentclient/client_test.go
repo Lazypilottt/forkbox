@@ -317,7 +317,7 @@ func TestFileErrors(t *testing.T) {
 	if _, err := c.ReadFile(ctx, dir, io.Discard); !errors.Is(err, fs.ErrInvalid) {
 		t.Errorf("read a directory: got %v", err)
 	}
-	big := bytes.NewReader(make([]byte, 4<<20))
+	big := bytes.NewReader(make([]byte, 32<<20)) // large enough that the agent hangs up mid-upload
 	if _, err := c.WriteFile(ctx, filepath.Join(dir, "no", "such", "dir", "f"), big, WriteOptions{}); !errors.Is(err, fs.ErrNotExist) {
 		t.Errorf("write without parents: got %v", err)
 	}

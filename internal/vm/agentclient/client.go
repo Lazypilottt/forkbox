@@ -318,6 +318,7 @@ func (c *Client) WriteFile(ctx context.Context, path string, r io.Reader, o Writ
 	var size uint64
 	buf := make([]byte, agentwire.ChunkSize)
 	var upErr error
+	ourFault := false // the source failed, not the connection
 	for {
 		n, rerr := io.ReadFull(r, buf)
 		if n > 0 {
@@ -327,6 +328,7 @@ func (c *Client) WriteFile(ctx context.Context, path string, r io.Reader, o Writ
 		last := rerr == io.EOF || rerr == io.ErrUnexpectedEOF
 		if rerr != nil && !last {
 			upErr = fmt.Errorf("agentclient: reading upload source: %w", rerr)
+			ourFault = true
 			break
 		}
 		if err := agentwire.Write(conn, &agentpb.Request{Op: &agentpb.Request_Chunk{Chunk: &agentpb.Chunk{Data: buf[:n], Eof: last}}}); err != nil {
@@ -337,8 +339,12 @@ func (c *Client) WriteFile(ctx context.Context, path string, r io.Reader, o Writ
 			break
 		}
 	}
-	if upErr != nil {
-		done() // the agent discards the partial file
+	// If the source failed, the agent is still waiting for chunks: hang up,
+	// and it discards the partial file. If the write failed, the agent hung
+	// up first, usually right after sending an error; read that before
+	// closing, or closing would throw it away.
+	if ourFault {
+		done()
 	}
 	res := <-answer
 	// An agent error (say, a bad path) explains a broken upload better than
