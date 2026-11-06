@@ -201,3 +201,40 @@ func TestLayers(t *testing.T) {
 		t.Errorf("missing layer: %v", err)
 	}
 }
+
+func TestCheckpointsAndLayerRefs(t *testing.T) {
+	s, _ := open(t)
+	ctx := context.Background()
+	s.InsertSandbox(ctx, &Sandbox{ID: "a", Template: "tpl", State: StateRunning, BaseLayer: "L2"})
+	for _, l := range []string{"L1", "L2", "L3"} {
+		s.InsertLayer(ctx, &Layer{ID: l, Kind: LayerFork, Dir: "/l/" + l, Mem: "/l/" + l + "/mem"})
+	}
+	cp := &Checkpoint{ID: "cp-1", SandboxID: "a", Name: "before", Layer: "L1", Dir: "/c/1", Template: "tpl", TemplateName: "python"}
+	if err := s.InsertCheckpoint(ctx, cp); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.InsertCheckpoint(ctx, &Checkpoint{ID: "cp-2", SandboxID: "a", Name: "before", Layer: "L1"}); !errors.Is(err, ErrExists) {
+		t.Errorf("duplicate name: %v", err)
+	}
+	for _, key := range []string{"before", "cp-1"} {
+		if got, err := s.GetCheckpoint(ctx, "a", key); err != nil || got.ID != "cp-1" || got.Layer != "L1" {
+			t.Errorf("get %q: %v %v", key, got, err)
+		}
+	}
+	un, _ := s.UnreferencedLayers(ctx)
+	if len(un) != 1 || un[0].ID != "L3" {
+		t.Errorf("unreferenced %v", un)
+	}
+	if n, _ := s.LayerRefs(ctx, "L1"); n != 1 {
+		t.Errorf("refs of L1: %d", n)
+	}
+	s.DeleteCheckpoint(ctx, "cp-1")
+	s.DeleteSandbox(ctx, "a")
+	un, _ = s.UnreferencedLayers(ctx)
+	if len(un) != 3 {
+		t.Errorf("after deleting everything, %d unreferenced", len(un))
+	}
+	if list, _ := s.ListCheckpoints(ctx, ""); len(list) != 0 {
+		t.Errorf("checkpoints left: %v", list)
+	}
+}

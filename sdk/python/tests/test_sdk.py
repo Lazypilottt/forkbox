@@ -143,6 +143,24 @@ def test_fork(daemon):
             k.destroy()
 
 
+def test_checkpoints(daemon):
+    with Sandbox.create() as sb:
+        cp = sb.checkpoint("before")
+        assert cp.name == "before" and cp.sandbox_id == sb.id and cp.paused_ms == 3.0
+        assert [c.name for c in sb.checkpoints()] == ["before"]
+        with pytest.raises(forkbox.AlreadyExistsError):
+            sb.checkpoint("before")
+        old_pid = sb.pid
+        assert sb.rewind("before") is sb and sb.pid != old_pid
+        twin = sb.restore_as_new("before")
+        assert twin.parent == sb.id and twin.id != sb.id
+        twin.destroy()
+        sb.delete_checkpoint("before")
+        assert sb.checkpoints() == []
+        with pytest.raises(NotFoundError):
+            sb.rewind("before")
+
+
 def test_expose(daemon):
     with Sandbox.create() as sb:
         assert sb.expose(8000) == ("127.0.0.1", 48000)

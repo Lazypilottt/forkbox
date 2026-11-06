@@ -32,15 +32,20 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	Forkbox_CreateSandbox_FullMethodName  = "/forkbox.v1.Forkbox/CreateSandbox"
-	Forkbox_GetSandbox_FullMethodName     = "/forkbox.v1.Forkbox/GetSandbox"
-	Forkbox_ListSandboxes_FullMethodName  = "/forkbox.v1.Forkbox/ListSandboxes"
-	Forkbox_Exec_FullMethodName           = "/forkbox.v1.Forkbox/Exec"
-	Forkbox_ReadFile_FullMethodName       = "/forkbox.v1.Forkbox/ReadFile"
-	Forkbox_WriteFile_FullMethodName      = "/forkbox.v1.Forkbox/WriteFile"
-	Forkbox_DestroySandbox_FullMethodName = "/forkbox.v1.Forkbox/DestroySandbox"
-	Forkbox_ExposePort_FullMethodName     = "/forkbox.v1.Forkbox/ExposePort"
-	Forkbox_ForkSandbox_FullMethodName    = "/forkbox.v1.Forkbox/ForkSandbox"
+	Forkbox_CreateSandbox_FullMethodName     = "/forkbox.v1.Forkbox/CreateSandbox"
+	Forkbox_GetSandbox_FullMethodName        = "/forkbox.v1.Forkbox/GetSandbox"
+	Forkbox_ListSandboxes_FullMethodName     = "/forkbox.v1.Forkbox/ListSandboxes"
+	Forkbox_Exec_FullMethodName              = "/forkbox.v1.Forkbox/Exec"
+	Forkbox_ReadFile_FullMethodName          = "/forkbox.v1.Forkbox/ReadFile"
+	Forkbox_WriteFile_FullMethodName         = "/forkbox.v1.Forkbox/WriteFile"
+	Forkbox_DestroySandbox_FullMethodName    = "/forkbox.v1.Forkbox/DestroySandbox"
+	Forkbox_ExposePort_FullMethodName        = "/forkbox.v1.Forkbox/ExposePort"
+	Forkbox_ForkSandbox_FullMethodName       = "/forkbox.v1.Forkbox/ForkSandbox"
+	Forkbox_CreateCheckpoint_FullMethodName  = "/forkbox.v1.Forkbox/CreateCheckpoint"
+	Forkbox_ListCheckpoints_FullMethodName   = "/forkbox.v1.Forkbox/ListCheckpoints"
+	Forkbox_RewindSandbox_FullMethodName     = "/forkbox.v1.Forkbox/RewindSandbox"
+	Forkbox_RestoreCheckpoint_FullMethodName = "/forkbox.v1.Forkbox/RestoreCheckpoint"
+	Forkbox_DeleteCheckpoint_FullMethodName  = "/forkbox.v1.Forkbox/DeleteCheckpoint"
 )
 
 // ForkboxClient is the client API for Forkbox service.
@@ -67,6 +72,16 @@ type ForkboxClient interface {
 	// Forks a running sandbox into n children that continue from its state.
 	// The parent is paused only for the diff snapshot and the disk copies.
 	ForkSandbox(ctx context.Context, in *ForkSandboxRequest, opts ...grpc.CallOption) (*ForkSandboxResponse, error)
+	// Checkpoints: a named memory layer plus a disk copy. They outlive the
+	// sandbox until deleted.
+	CreateCheckpoint(ctx context.Context, in *CreateCheckpointRequest, opts ...grpc.CallOption) (*Checkpoint, error)
+	ListCheckpoints(ctx context.Context, in *ListCheckpointsRequest, opts ...grpc.CallOption) (*ListCheckpointsResponse, error)
+	// Restores a checkpoint into a fresh VM with the same sandbox id, network
+	// slot and port forwards; the old VM is stopped.
+	RewindSandbox(ctx context.Context, in *RewindSandboxRequest, opts ...grpc.CallOption) (*Sandbox, error)
+	// Creates a separate sandbox from a checkpoint.
+	RestoreCheckpoint(ctx context.Context, in *RestoreCheckpointRequest, opts ...grpc.CallOption) (*Sandbox, error)
+	DeleteCheckpoint(ctx context.Context, in *DeleteCheckpointRequest, opts ...grpc.CallOption) (*DeleteCheckpointResponse, error)
 }
 
 type forkboxClient struct {
@@ -188,6 +203,56 @@ func (c *forkboxClient) ForkSandbox(ctx context.Context, in *ForkSandboxRequest,
 	return out, nil
 }
 
+func (c *forkboxClient) CreateCheckpoint(ctx context.Context, in *CreateCheckpointRequest, opts ...grpc.CallOption) (*Checkpoint, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Checkpoint)
+	err := c.cc.Invoke(ctx, Forkbox_CreateCheckpoint_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *forkboxClient) ListCheckpoints(ctx context.Context, in *ListCheckpointsRequest, opts ...grpc.CallOption) (*ListCheckpointsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListCheckpointsResponse)
+	err := c.cc.Invoke(ctx, Forkbox_ListCheckpoints_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *forkboxClient) RewindSandbox(ctx context.Context, in *RewindSandboxRequest, opts ...grpc.CallOption) (*Sandbox, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Sandbox)
+	err := c.cc.Invoke(ctx, Forkbox_RewindSandbox_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *forkboxClient) RestoreCheckpoint(ctx context.Context, in *RestoreCheckpointRequest, opts ...grpc.CallOption) (*Sandbox, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Sandbox)
+	err := c.cc.Invoke(ctx, Forkbox_RestoreCheckpoint_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *forkboxClient) DeleteCheckpoint(ctx context.Context, in *DeleteCheckpointRequest, opts ...grpc.CallOption) (*DeleteCheckpointResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteCheckpointResponse)
+	err := c.cc.Invoke(ctx, Forkbox_DeleteCheckpoint_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ForkboxServer is the server API for Forkbox service.
 // All implementations must embed UnimplementedForkboxServer
 // for forward compatibility.
@@ -212,6 +277,16 @@ type ForkboxServer interface {
 	// Forks a running sandbox into n children that continue from its state.
 	// The parent is paused only for the diff snapshot and the disk copies.
 	ForkSandbox(context.Context, *ForkSandboxRequest) (*ForkSandboxResponse, error)
+	// Checkpoints: a named memory layer plus a disk copy. They outlive the
+	// sandbox until deleted.
+	CreateCheckpoint(context.Context, *CreateCheckpointRequest) (*Checkpoint, error)
+	ListCheckpoints(context.Context, *ListCheckpointsRequest) (*ListCheckpointsResponse, error)
+	// Restores a checkpoint into a fresh VM with the same sandbox id, network
+	// slot and port forwards; the old VM is stopped.
+	RewindSandbox(context.Context, *RewindSandboxRequest) (*Sandbox, error)
+	// Creates a separate sandbox from a checkpoint.
+	RestoreCheckpoint(context.Context, *RestoreCheckpointRequest) (*Sandbox, error)
+	DeleteCheckpoint(context.Context, *DeleteCheckpointRequest) (*DeleteCheckpointResponse, error)
 	mustEmbedUnimplementedForkboxServer()
 }
 
@@ -248,6 +323,21 @@ func (UnimplementedForkboxServer) ExposePort(context.Context, *ExposePortRequest
 }
 func (UnimplementedForkboxServer) ForkSandbox(context.Context, *ForkSandboxRequest) (*ForkSandboxResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ForkSandbox not implemented")
+}
+func (UnimplementedForkboxServer) CreateCheckpoint(context.Context, *CreateCheckpointRequest) (*Checkpoint, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateCheckpoint not implemented")
+}
+func (UnimplementedForkboxServer) ListCheckpoints(context.Context, *ListCheckpointsRequest) (*ListCheckpointsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListCheckpoints not implemented")
+}
+func (UnimplementedForkboxServer) RewindSandbox(context.Context, *RewindSandboxRequest) (*Sandbox, error) {
+	return nil, status.Error(codes.Unimplemented, "method RewindSandbox not implemented")
+}
+func (UnimplementedForkboxServer) RestoreCheckpoint(context.Context, *RestoreCheckpointRequest) (*Sandbox, error) {
+	return nil, status.Error(codes.Unimplemented, "method RestoreCheckpoint not implemented")
+}
+func (UnimplementedForkboxServer) DeleteCheckpoint(context.Context, *DeleteCheckpointRequest) (*DeleteCheckpointResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteCheckpoint not implemented")
 }
 func (UnimplementedForkboxServer) mustEmbedUnimplementedForkboxServer() {}
 func (UnimplementedForkboxServer) testEmbeddedByValue()                 {}
@@ -407,6 +497,96 @@ func _Forkbox_ForkSandbox_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Forkbox_CreateCheckpoint_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateCheckpointRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ForkboxServer).CreateCheckpoint(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Forkbox_CreateCheckpoint_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ForkboxServer).CreateCheckpoint(ctx, req.(*CreateCheckpointRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Forkbox_ListCheckpoints_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListCheckpointsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ForkboxServer).ListCheckpoints(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Forkbox_ListCheckpoints_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ForkboxServer).ListCheckpoints(ctx, req.(*ListCheckpointsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Forkbox_RewindSandbox_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RewindSandboxRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ForkboxServer).RewindSandbox(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Forkbox_RewindSandbox_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ForkboxServer).RewindSandbox(ctx, req.(*RewindSandboxRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Forkbox_RestoreCheckpoint_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RestoreCheckpointRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ForkboxServer).RestoreCheckpoint(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Forkbox_RestoreCheckpoint_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ForkboxServer).RestoreCheckpoint(ctx, req.(*RestoreCheckpointRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Forkbox_DeleteCheckpoint_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteCheckpointRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ForkboxServer).DeleteCheckpoint(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Forkbox_DeleteCheckpoint_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ForkboxServer).DeleteCheckpoint(ctx, req.(*DeleteCheckpointRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Forkbox_ServiceDesc is the grpc.ServiceDesc for Forkbox service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -437,6 +617,26 @@ var Forkbox_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ForkSandbox",
 			Handler:    _Forkbox_ForkSandbox_Handler,
+		},
+		{
+			MethodName: "CreateCheckpoint",
+			Handler:    _Forkbox_CreateCheckpoint_Handler,
+		},
+		{
+			MethodName: "ListCheckpoints",
+			Handler:    _Forkbox_ListCheckpoints_Handler,
+		},
+		{
+			MethodName: "RewindSandbox",
+			Handler:    _Forkbox_RewindSandbox_Handler,
+		},
+		{
+			MethodName: "RestoreCheckpoint",
+			Handler:    _Forkbox_RestoreCheckpoint_Handler,
+		},
+		{
+			MethodName: "DeleteCheckpoint",
+			Handler:    _Forkbox_DeleteCheckpoint_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

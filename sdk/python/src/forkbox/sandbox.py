@@ -71,6 +71,24 @@ class ForkTimings:
 
 
 @dataclass(frozen=True)
+class Checkpoint:
+    """A named point a sandbox can be rewound to (memory and disk)."""
+
+    id: str
+    sandbox_id: str
+    name: str
+    layer: str
+    created_at: datetime
+    paused_ms: float = 0.0  # set on the checkpoint just taken
+    dirty_bytes: int = 0
+
+    @classmethod
+    def _from_pb(cls, m: pb.Checkpoint) -> Checkpoint:
+        return cls(m.id, m.sandbox_id, m.name, m.layer,
+                   datetime.fromtimestamp(m.created_at_unix_ms / 1000, tz=timezone.utc), m.paused_ms, m.dirty_bytes)
+
+
+@dataclass(frozen=True)
 class CreateTimings:
     total_ms: float
     disk_ms: float
@@ -312,6 +330,37 @@ class Sandbox:
             tuple(t.restore_ms), t.total_ms, t.diff_bytes, t.dirty_bytes, r.layer,
         )
         return [Sandbox._from_pb(m, self._client) for m in r.children]
+
+    def _call(self, method: str, req):
+        try:
+            return getattr(self._client.stub, method)(req, metadata=self._client.metadata)
+        except grpc.RpcError as e:
+            raise from_rpc(e) from None
+
+    def checkpoint(self, name: str) -> Checkpoint:
+        """Save this sandbox's memory, processes and disk under ``name``. The
+        sandbox pauses only for the snapshot and keeps running."""
+        return Checkpoint._from_pb(self._call("CreateCheckpoint", pb.CreateCheckpointRequest(sandbox_id=self.id, name=name)))
+
+    def checkpoints(self) -> list[Checkpoint]:
+        """This sandbox's checkpoints, oldest first."""
+        r = self._call("ListCheckpoints", pb.ListCheckpointsRequest(sandbox_id=self.id))
+        return [Checkpoint._from_pb(c) for c in r.checkpoints]
+
+    def rewind(self, name: str) -> Sandbox:
+        """Go back to a checkpoint: same id, network and port forwards; the
+        memory, processes and disk are the checkpoint's."""
+        m = self._call("RewindSandbox", pb.RewindSandboxRequest(sandbox_id=self.id, name=name))
+        self.state, self.pid = m.state, m.pid
+        return self
+
+    def restore_as_new(self, name: str, *, ttl: int | None = None) -> Sandbox:
+        """Create a separate sandbox from one of this sandbox's checkpoints."""
+        m = self._call("RestoreCheckpoint", pb.RestoreCheckpointRequest(sandbox_id=self.id, name=name, ttl_s=ttl or 0))
+        return Sandbox._from_pb(m, self._client)
+
+    def delete_checkpoint(self, name: str) -> None:
+        self._call("DeleteCheckpoint", pb.DeleteCheckpointRequest(sandbox_id=self.id, name=name))
 
     def expose(self, port: int, host_port: int = 0) -> tuple[str, int]:
         """Forward a host TCP port to ``port`` in the guest (for previews).

@@ -19,12 +19,13 @@ from .errors import (
     UnauthenticatedError,
     UnavailableError,
 )
-from .sandbox import CreateTimings, ExecEvent, ExecResult, FileSystem, ForkTimings, Sandbox
+from .sandbox import Checkpoint, CreateTimings, ExecEvent, ExecResult, FileSystem, ForkTimings, Sandbox
 
 __version__ = "0.1.0"
 
 __all__ = [
     "AlreadyExistsError",
+    "Checkpoint",
     "Client",
     "CommandError",
     "CreateTimings",

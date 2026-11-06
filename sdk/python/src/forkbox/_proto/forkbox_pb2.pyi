@@ -226,6 +226,74 @@ class ForkSandboxResponse(_message.Message):
     layer: str
     def __init__(self, children: _Optional[_Iterable[_Union[Sandbox, _Mapping]]] = ..., timings: _Optional[_Union[ForkTimings, _Mapping]] = ..., layer: _Optional[str] = ...) -> None: ...
 
+class Checkpoint(_message.Message):
+    __slots__ = ("id", "sandbox_id", "name", "layer", "created_at_unix_ms", "paused_ms", "dirty_bytes")
+    ID_FIELD_NUMBER: _ClassVar[int]
+    SANDBOX_ID_FIELD_NUMBER: _ClassVar[int]
+    NAME_FIELD_NUMBER: _ClassVar[int]
+    LAYER_FIELD_NUMBER: _ClassVar[int]
+    CREATED_AT_UNIX_MS_FIELD_NUMBER: _ClassVar[int]
+    PAUSED_MS_FIELD_NUMBER: _ClassVar[int]
+    DIRTY_BYTES_FIELD_NUMBER: _ClassVar[int]
+    id: str
+    sandbox_id: str
+    name: str
+    layer: str
+    created_at_unix_ms: int
+    paused_ms: float
+    dirty_bytes: int
+    def __init__(self, id: _Optional[str] = ..., sandbox_id: _Optional[str] = ..., name: _Optional[str] = ..., layer: _Optional[str] = ..., created_at_unix_ms: _Optional[int] = ..., paused_ms: _Optional[float] = ..., dirty_bytes: _Optional[int] = ...) -> None: ...
+
+class CreateCheckpointRequest(_message.Message):
+    __slots__ = ("sandbox_id", "name")
+    SANDBOX_ID_FIELD_NUMBER: _ClassVar[int]
+    NAME_FIELD_NUMBER: _ClassVar[int]
+    sandbox_id: str
+    name: str
+    def __init__(self, sandbox_id: _Optional[str] = ..., name: _Optional[str] = ...) -> None: ...
+
+class ListCheckpointsRequest(_message.Message):
+    __slots__ = ("sandbox_id",)
+    SANDBOX_ID_FIELD_NUMBER: _ClassVar[int]
+    sandbox_id: str
+    def __init__(self, sandbox_id: _Optional[str] = ...) -> None: ...
+
+class ListCheckpointsResponse(_message.Message):
+    __slots__ = ("checkpoints",)
+    CHECKPOINTS_FIELD_NUMBER: _ClassVar[int]
+    checkpoints: _containers.RepeatedCompositeFieldContainer[Checkpoint]
+    def __init__(self, checkpoints: _Optional[_Iterable[_Union[Checkpoint, _Mapping]]] = ...) -> None: ...
+
+class RewindSandboxRequest(_message.Message):
+    __slots__ = ("sandbox_id", "name")
+    SANDBOX_ID_FIELD_NUMBER: _ClassVar[int]
+    NAME_FIELD_NUMBER: _ClassVar[int]
+    sandbox_id: str
+    name: str
+    def __init__(self, sandbox_id: _Optional[str] = ..., name: _Optional[str] = ...) -> None: ...
+
+class RestoreCheckpointRequest(_message.Message):
+    __slots__ = ("sandbox_id", "name", "ttl_s")
+    SANDBOX_ID_FIELD_NUMBER: _ClassVar[int]
+    NAME_FIELD_NUMBER: _ClassVar[int]
+    TTL_S_FIELD_NUMBER: _ClassVar[int]
+    sandbox_id: str
+    name: str
+    ttl_s: int
+    def __init__(self, sandbox_id: _Optional[str] = ..., name: _Optional[str] = ..., ttl_s: _Optional[int] = ...) -> None: ...
+
+class DeleteCheckpointRequest(_message.Message):
+    __slots__ = ("sandbox_id", "name")
+    SANDBOX_ID_FIELD_NUMBER: _ClassVar[int]
+    NAME_FIELD_NUMBER: _ClassVar[int]
+    sandbox_id: str
+    name: str
+    def __init__(self, sandbox_id: _Optional[str] = ..., name: _Optional[str] = ...) -> None: ...
+
+class DeleteCheckpointResponse(_message.Message):
+    __slots__ = ()
+    def __init__(self) -> None: ...
+
 class ExposePortResponse(_message.Message):
     __slots__ = ("host", "host_port")
     HOST_FIELD_NUMBER: _ClassVar[int]

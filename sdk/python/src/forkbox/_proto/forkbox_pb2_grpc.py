@@ -79,6 +79,31 @@ class ForkboxStub:
                 request_serializer=forkbox__pb2.ForkSandboxRequest.SerializeToString,
                 response_deserializer=forkbox__pb2.ForkSandboxResponse.FromString,
                 _registered_method=True)
+        self.CreateCheckpoint = channel.unary_unary(
+                '/forkbox.v1.Forkbox/CreateCheckpoint',
+                request_serializer=forkbox__pb2.CreateCheckpointRequest.SerializeToString,
+                response_deserializer=forkbox__pb2.Checkpoint.FromString,
+                _registered_method=True)
+        self.ListCheckpoints = channel.unary_unary(
+                '/forkbox.v1.Forkbox/ListCheckpoints',
+                request_serializer=forkbox__pb2.ListCheckpointsRequest.SerializeToString,
+                response_deserializer=forkbox__pb2.ListCheckpointsResponse.FromString,
+                _registered_method=True)
+        self.RewindSandbox = channel.unary_unary(
+                '/forkbox.v1.Forkbox/RewindSandbox',
+                request_serializer=forkbox__pb2.RewindSandboxRequest.SerializeToString,
+                response_deserializer=forkbox__pb2.Sandbox.FromString,
+                _registered_method=True)
+        self.RestoreCheckpoint = channel.unary_unary(
+                '/forkbox.v1.Forkbox/RestoreCheckpoint',
+                request_serializer=forkbox__pb2.RestoreCheckpointRequest.SerializeToString,
+                response_deserializer=forkbox__pb2.Sandbox.FromString,
+                _registered_method=True)
+        self.DeleteCheckpoint = channel.unary_unary(
+                '/forkbox.v1.Forkbox/DeleteCheckpoint',
+                request_serializer=forkbox__pb2.DeleteCheckpointRequest.SerializeToString,
+                response_deserializer=forkbox__pb2.DeleteCheckpointResponse.FromString,
+                _registered_method=True)
 
 
 class ForkboxServicer:
@@ -149,6 +174,41 @@ class ForkboxServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def CreateCheckpoint(self, request, context):
+        """Checkpoints: a named memory layer plus a disk copy. They outlive the
+        sandbox until deleted.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ListCheckpoints(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def RewindSandbox(self, request, context):
+        """Restores a checkpoint into a fresh VM with the same sandbox id, network
+        slot and port forwards; the old VM is stopped.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def RestoreCheckpoint(self, request, context):
+        """Creates a separate sandbox from a checkpoint.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def DeleteCheckpoint(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_ForkboxServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -196,6 +256,31 @@ def add_ForkboxServicer_to_server(servicer, server):
                     servicer.ForkSandbox,
                     request_deserializer=forkbox__pb2.ForkSandboxRequest.FromString,
                     response_serializer=forkbox__pb2.ForkSandboxResponse.SerializeToString,
+            ),
+            'CreateCheckpoint': grpc.unary_unary_rpc_method_handler(
+                    servicer.CreateCheckpoint,
+                    request_deserializer=forkbox__pb2.CreateCheckpointRequest.FromString,
+                    response_serializer=forkbox__pb2.Checkpoint.SerializeToString,
+            ),
+            'ListCheckpoints': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListCheckpoints,
+                    request_deserializer=forkbox__pb2.ListCheckpointsRequest.FromString,
+                    response_serializer=forkbox__pb2.ListCheckpointsResponse.SerializeToString,
+            ),
+            'RewindSandbox': grpc.unary_unary_rpc_method_handler(
+                    servicer.RewindSandbox,
+                    request_deserializer=forkbox__pb2.RewindSandboxRequest.FromString,
+                    response_serializer=forkbox__pb2.Sandbox.SerializeToString,
+            ),
+            'RestoreCheckpoint': grpc.unary_unary_rpc_method_handler(
+                    servicer.RestoreCheckpoint,
+                    request_deserializer=forkbox__pb2.RestoreCheckpointRequest.FromString,
+                    response_serializer=forkbox__pb2.Sandbox.SerializeToString,
+            ),
+            'DeleteCheckpoint': grpc.unary_unary_rpc_method_handler(
+                    servicer.DeleteCheckpoint,
+                    request_deserializer=forkbox__pb2.DeleteCheckpointRequest.FromString,
+                    response_serializer=forkbox__pb2.DeleteCheckpointResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -441,6 +526,141 @@ class Forkbox:
             '/forkbox.v1.Forkbox/ForkSandbox',
             forkbox__pb2.ForkSandboxRequest.SerializeToString,
             forkbox__pb2.ForkSandboxResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def CreateCheckpoint(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/forkbox.v1.Forkbox/CreateCheckpoint',
+            forkbox__pb2.CreateCheckpointRequest.SerializeToString,
+            forkbox__pb2.Checkpoint.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListCheckpoints(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/forkbox.v1.Forkbox/ListCheckpoints',
+            forkbox__pb2.ListCheckpointsRequest.SerializeToString,
+            forkbox__pb2.ListCheckpointsResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def RewindSandbox(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/forkbox.v1.Forkbox/RewindSandbox',
+            forkbox__pb2.RewindSandboxRequest.SerializeToString,
+            forkbox__pb2.Sandbox.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def RestoreCheckpoint(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/forkbox.v1.Forkbox/RestoreCheckpoint',
+            forkbox__pb2.RestoreCheckpointRequest.SerializeToString,
+            forkbox__pb2.Sandbox.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def DeleteCheckpoint(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/forkbox.v1.Forkbox/DeleteCheckpoint',
+            forkbox__pb2.DeleteCheckpointRequest.SerializeToString,
+            forkbox__pb2.DeleteCheckpointResponse.FromString,
             options,
             channel_credentials,
             insecure,

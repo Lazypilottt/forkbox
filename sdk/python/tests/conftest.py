@@ -31,6 +31,7 @@ class FakeForkbox(pbg.ForkboxServicer):
     def __init__(self) -> None:
         self.sandboxes: dict[str, pb.Sandbox] = {}
         self.files: dict[tuple[str, str], bytes] = {}
+        self.checkpoints: dict[tuple[str, str], pb.Checkpoint] = {}
         self.n = 0
         self.lock = threading.Lock()
         self.last_pids: list[int] = []
@@ -135,6 +136,39 @@ class FakeForkbox(pbg.ForkboxServicer):
             out.children.append(child)
             out.timings.restore_ms.append(30.0)
         return out
+
+    def CreateCheckpoint(self, request, context):
+        self._get(request.sandbox_id, context)
+        key = (request.sandbox_id, request.name)
+        if key in self.checkpoints:
+            context.abort(grpc.StatusCode.ALREADY_EXISTS, f"checkpoint {request.name!r} exists")
+        cp = pb.Checkpoint(id=f"cp-{len(self.checkpoints) + 1}", sandbox_id=request.sandbox_id, name=request.name,
+                           layer="layer-x", created_at_unix_ms=int(time.time() * 1000), paused_ms=3.0, dirty_bytes=8192)
+        self.checkpoints[key] = cp
+        return cp
+
+    def ListCheckpoints(self, request, context):
+        return pb.ListCheckpointsResponse(checkpoints=[c for (sid, _), c in self.checkpoints.items() if sid == request.sandbox_id])
+
+    def RewindSandbox(self, request, context):
+        sb = self._get(request.sandbox_id, context)
+        if (request.sandbox_id, request.name) not in self.checkpoints:
+            context.abort(grpc.StatusCode.NOT_FOUND, f"checkpoint {request.name!r} not found")
+        sb.pid += 1000
+        return sb
+
+    def RestoreCheckpoint(self, request, context):
+        if (request.sandbox_id, request.name) not in self.checkpoints:
+            context.abort(grpc.StatusCode.NOT_FOUND, f"checkpoint {request.name!r} not found")
+        out = self.CreateSandbox(pb.CreateSandboxRequest(template="python", ttl_s=request.ttl_s), context)
+        out.parent = request.sandbox_id
+        self.sandboxes[out.id].parent = request.sandbox_id
+        return out
+
+    def DeleteCheckpoint(self, request, context):
+        if self.checkpoints.pop((request.sandbox_id, request.name), None) is None:
+            context.abort(grpc.StatusCode.NOT_FOUND, f"checkpoint {request.name!r} not found")
+        return pb.DeleteCheckpointResponse()
 
     def ExposePort(self, request, context):
         self._get(request.sandbox_id, context)

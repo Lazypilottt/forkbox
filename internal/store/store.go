@@ -60,6 +60,17 @@ var migrations = []string{
 		created_at     INTEGER NOT NULL
 	);
 	ALTER TABLE sandboxes ADD COLUMN base_layer TEXT NOT NULL DEFAULT '';`,
+	`CREATE TABLE checkpoints (
+		id            TEXT PRIMARY KEY,
+		sandbox_id    TEXT NOT NULL,
+		name          TEXT NOT NULL,
+		layer         TEXT NOT NULL,
+		dir           TEXT NOT NULL,
+		template      TEXT NOT NULL,
+		template_name TEXT NOT NULL,
+		created_at    INTEGER NOT NULL,
+		UNIQUE (sandbox_id, name)
+	);`,
 }
 
 // Open opens (creating if needed) the database at path and migrates it.
@@ -405,4 +416,131 @@ func (s *Store) SetBaseLayer(ctx context.Context, sandboxID, layer string) error
 		return err
 	}
 	return mustAffect(res, sandboxID)
+}
+
+// Checkpoint is a named point a sandbox can be rewound to: a memory layer
+// plus a disk copy (in Dir). It outlives its sandbox until deleted, so it
+// can still be restored as a new sandbox.
+type Checkpoint struct {
+	ID           string
+	SandboxID    string
+	Name         string
+	Layer        string
+	Dir          string
+	Template     string
+	TemplateName string
+	CreatedAt    time.Time
+}
+
+// InsertCheckpoint records a checkpoint; names are unique per sandbox.
+func (s *Store) InsertCheckpoint(ctx context.Context, c *Checkpoint) error {
+	if c.CreatedAt.IsZero() {
+		c.CreatedAt = time.Now()
+	}
+	_, err := s.db.ExecContext(ctx, `INSERT INTO checkpoints (id, sandbox_id, name, layer, dir, template, template_name, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, c.ID, c.SandboxID, c.Name, c.Layer, c.Dir, c.Template, c.TemplateName, c.CreatedAt.UnixNano())
+	if isConstraint(err) {
+		return fmt.Errorf("%w: checkpoint %q of %s", ErrExists, c.Name, c.SandboxID)
+	}
+	return err
+}
+
+const selectCheckpoint = `SELECT id, sandbox_id, name, layer, dir, template, template_name, created_at FROM checkpoints`
+
+func scanCheckpoints(rows *sql.Rows) ([]*Checkpoint, error) {
+	defer rows.Close()
+	var out []*Checkpoint
+	for rows.Next() {
+		var c Checkpoint
+		var created int64
+		if err := rows.Scan(&c.ID, &c.SandboxID, &c.Name, &c.Layer, &c.Dir, &c.Template, &c.TemplateName, &created); err != nil {
+			return nil, err
+		}
+		c.CreatedAt = time.Unix(0, created)
+		out = append(out, &c)
+	}
+	return out, rows.Err()
+}
+
+// GetCheckpoint finds a checkpoint by id, or by sandbox and name.
+func (s *Store) GetCheckpoint(ctx context.Context, sandboxID, nameOrID string) (*Checkpoint, error) {
+	rows, err := s.db.QueryContext(ctx, selectCheckpoint+` WHERE id = ? OR (sandbox_id = ? AND name = ?)`, nameOrID, sandboxID, nameOrID)
+	if err != nil {
+		return nil, err
+	}
+	list, err := scanCheckpoints(rows)
+	if err != nil {
+		return nil, err
+	}
+	if len(list) == 0 {
+		return nil, fmt.Errorf("%w: checkpoint %q of %s", ErrNotFound, nameOrID, sandboxID)
+	}
+	return list[0], nil
+}
+
+// ListCheckpoints returns a sandbox's checkpoints, oldest first; an empty
+// id lists all of them.
+func (s *Store) ListCheckpoints(ctx context.Context, sandboxID string) ([]*Checkpoint, error) {
+	q, args := selectCheckpoint+` ORDER BY created_at`, []any{}
+	if sandboxID != "" {
+		q, args = selectCheckpoint+` WHERE sandbox_id = ? ORDER BY created_at`, []any{sandboxID}
+	}
+	rows, err := s.db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	return scanCheckpoints(rows)
+}
+
+// DeleteCheckpoint removes a checkpoint record.
+func (s *Store) DeleteCheckpoint(ctx context.Context, id string) error {
+	res, err := s.db.ExecContext(ctx, `DELETE FROM checkpoints WHERE id = ?`, id)
+	if err != nil {
+		return err
+	}
+	return mustAffect(res, id)
+}
+
+// UnreferencedLayers are layers no sandbox has as its base and no
+// checkpoint uses: safe to delete. A running VM that still maps a deleted
+// layer's memory file keeps working; the kernel frees it when the VM exits.
+func (s *Store) UnreferencedLayers(ctx context.Context) ([]*Layer, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT id FROM layers l
+		WHERE NOT EXISTS (SELECT 1 FROM sandboxes s WHERE s.base_layer = l.id)
+		  AND NOT EXISTS (SELECT 1 FROM checkpoints c WHERE c.layer = l.id)`)
+	if err != nil {
+		return nil, err
+	}
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	rows.Close()
+	var out []*Layer
+	for _, id := range ids {
+		l, err := s.GetLayer(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, l)
+	}
+	return out, nil
+}
+
+// LayerRefs counts the sandboxes and checkpoints that reference a layer.
+func (s *Store) LayerRefs(ctx context.Context, id string) (int, error) {
+	var n int
+	err := s.db.QueryRowContext(ctx, `SELECT (SELECT COUNT(*) FROM sandboxes WHERE base_layer = ?) + (SELECT COUNT(*) FROM checkpoints WHERE layer = ?)`, id, id).Scan(&n)
+	return n, err
+}
+
+// DeleteLayer removes a layer record.
+func (s *Store) DeleteLayer(ctx context.Context, id string) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM layers WHERE id = ?`, id)
+	return err
 }

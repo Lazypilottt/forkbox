@@ -43,6 +43,7 @@ type fakeBackend struct {
 	dir  string
 	mu   sync.Mutex
 	recs map[string]*store.Sandbox
+	cps  map[string]*store.Checkpoint
 	n    int
 }
 
@@ -156,6 +157,76 @@ func (b *fakeBackend) Fork(ctx context.Context, id string, n, _ int) (*sandbox.F
 	return res, nil
 }
 
+func (b *fakeBackend) Checkpoint(ctx context.Context, id, name string) (*store.Checkpoint, *sandbox.ForkTimings, error) {
+	if _, err := b.Get(ctx, id); err != nil {
+		return nil, nil, err
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.cps == nil {
+		b.cps = map[string]*store.Checkpoint{}
+	}
+	if _, ok := b.cps[id+"/"+name]; ok {
+		return nil, nil, fmt.Errorf("%w: checkpoint %q", store.ErrExists, name)
+	}
+	cp := &store.Checkpoint{ID: "cp-" + name, SandboxID: id, Name: name, Layer: "layer-" + name, CreatedAt: time.Now()}
+	b.cps[id+"/"+name] = cp
+	return cp, &sandbox.ForkTimings{ParentPaused: 2 * time.Millisecond, DirtyBytes: 4096}, nil
+}
+
+func (b *fakeBackend) Checkpoints(_ context.Context, id string) ([]*store.Checkpoint, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	var out []*store.Checkpoint
+	for _, c := range b.cps {
+		if id == "" || c.SandboxID == id {
+			out = append(out, c)
+		}
+	}
+	return out, nil
+}
+
+func (b *fakeBackend) cp(id, name string) (*store.Checkpoint, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if c, ok := b.cps[id+"/"+name]; ok {
+		return c, nil
+	}
+	return nil, fmt.Errorf("%w: checkpoint %q", store.ErrNotFound, name)
+}
+
+func (b *fakeBackend) Rewind(ctx context.Context, id, name string) (*sandbox.Created, error) {
+	if _, err := b.cp(id, name); err != nil {
+		return nil, err
+	}
+	rec, err := b.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return &sandbox.Created{Sandbox: rec}, nil
+}
+
+func (b *fakeBackend) RestoreAsNew(ctx context.Context, id, name string, _ time.Duration) (*sandbox.Created, error) {
+	if _, err := b.cp(id, name); err != nil {
+		return nil, err
+	}
+	c, err := b.Create(ctx, sandbox.CreateOptions{Template: "python"})
+	if err == nil {
+		c.Parent = id
+	}
+	return c, err
+}
+
+func (b *fakeBackend) DeleteCheckpoint(_ context.Context, id, name string) error {
+	if _, err := b.cp(id, name); err != nil {
+		return err
+	}
+	b.mu.Lock()
+	delete(b.cps, id+"/"+name)
+	b.mu.Unlock()
+	return nil
+}
+
 func (b *fakeBackend) Agent(id string) *agentclient.Client {
 	b.mu.Lock()
 	sock := b.recs[id].Vsock
@@ -221,6 +292,28 @@ func TestSandboxCRUD(t *testing.T) {
 	}
 	if _, err := c.ExposePort(ctx, &pb.ExposePortRequest{SandboxId: "sb-9", GuestPort: 80}); code(err) != codes.NotFound {
 		t.Errorf("expose on a missing sandbox: %v", err)
+	}
+	cp, err := c.CreateCheckpoint(ctx, &pb.CreateCheckpointRequest{SandboxId: "sb-1", Name: "before"})
+	if err != nil || cp.Name != "before" || cp.PausedMs != 2 || cp.DirtyBytes != 4096 {
+		t.Errorf("checkpoint: %v %v", cp, err)
+	}
+	if _, err := c.CreateCheckpoint(ctx, &pb.CreateCheckpointRequest{SandboxId: "sb-1", Name: "before"}); code(err) != codes.AlreadyExists {
+		t.Errorf("duplicate checkpoint: %v", err)
+	}
+	if l, err := c.ListCheckpoints(ctx, &pb.ListCheckpointsRequest{SandboxId: "sb-1"}); err != nil || len(l.Checkpoints) != 1 {
+		t.Errorf("list checkpoints: %v %v", l, err)
+	}
+	if sb, err := c.RewindSandbox(ctx, &pb.RewindSandboxRequest{SandboxId: "sb-1", Name: "before"}); err != nil || sb.Id != "sb-1" {
+		t.Errorf("rewind: %v %v", sb, err)
+	}
+	if _, err := c.RewindSandbox(ctx, &pb.RewindSandboxRequest{SandboxId: "sb-1", Name: "nope"}); code(err) != codes.NotFound {
+		t.Errorf("rewind to a missing checkpoint: %v", err)
+	}
+	if sb, err := c.RestoreCheckpoint(ctx, &pb.RestoreCheckpointRequest{SandboxId: "sb-1", Name: "before"}); err != nil || sb.Parent != "sb-1" {
+		t.Errorf("restore as new: %v %v", sb, err)
+	}
+	if _, err := c.DeleteCheckpoint(ctx, &pb.DeleteCheckpointRequest{SandboxId: "sb-1", Name: "before"}); err != nil {
+		t.Errorf("delete checkpoint: %v", err)
 	}
 	fr, err := c.ForkSandbox(ctx, &pb.ForkSandboxRequest{Id: "sb-1", N: 3})
 	if err != nil || len(fr.Children) != 3 || fr.Children[0].Parent != "sb-1" || fr.Layer != "layer-x" ||

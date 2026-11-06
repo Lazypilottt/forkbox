@@ -48,6 +48,7 @@ type Manager struct {
 	vms       map[string]*vm.VM         // VMs started by this process
 	listeners map[string][]net.Listener // port forwards, by sandbox
 	forkLocks map[string]*sync.Mutex    // one fork at a time per parent
+	gcMu      sync.Mutex
 }
 
 // New returns a manager.
@@ -179,18 +180,14 @@ func (m *Manager) restoreInto(ctx context.Context, c *Created, snapDir, mem, dis
 	}
 	c.Timings.Network = time.Since(t)
 
-	t = time.Now()
-	v, err := m.VMs.Restore(ctx, snapDir, vm.MemBackend{Kind: vm.MemFile, Path: mem},
-		vm.Config{ID: rec.ID, Rootfs: vm.Drive{Path: disk}, NetNS: netns.Path(rec.ID)})
-	if err != nil {
-		return err
-	}
-	m.mu.Lock()
-	m.vms[rec.ID] = v
-	m.mu.Unlock()
-	c.Timings.Restore = time.Since(t)
+	return m.restoreVM(ctx, c, snapDir, mem, disk)
+}
 
-	t = time.Now()
+// finishRestore resumes a restored VM, waits for its agent and gives the
+// guest its identity, then marks the sandbox running.
+func (m *Manager) finishRestore(ctx context.Context, c *Created, v *vm.VM) error {
+	rec := c.Sandbox
+	t := time.Now()
 	if err := v.Resume(ctx); err != nil {
 		return err
 	}
@@ -254,7 +251,11 @@ func (m *Manager) Destroy(ctx context.Context, id string) error {
 		_ = m.Store.SetState(ctx, id, store.StateFailed, 0, err.Error())
 		return err
 	}
-	return m.Store.DeleteSandbox(ctx, id)
+	if err := m.Store.DeleteSandbox(ctx, id); err != nil {
+		return err
+	}
+	m.gc(ctx)
+	return nil
 }
 
 func (m *Manager) cleanup(ctx context.Context, id, dir string) error {
@@ -356,6 +357,27 @@ func (m *Manager) Recover(ctx context.Context) (*RecoverReport, error) {
 		}
 		rep.Orphans = append(rep.Orphans, id)
 	}
+	// Checkpoint and layer directories nobody records (a crash mid-way).
+	cps, _ := m.Store.ListCheckpoints(ctx, "")
+	knownCP := map[string]bool{}
+	for _, c := range cps {
+		knownCP[filepath.Base(c.Dir)] = true
+	}
+	dirs, _ := filepath.Glob(filepath.Join(m.DataDir, "checkpoints", "cp-*"))
+	for _, d := range dirs {
+		if !knownCP[filepath.Base(d)] {
+			os.RemoveAll(d)
+			rep.Orphans = append(rep.Orphans, filepath.Base(d))
+		}
+	}
+	dirs, _ = filepath.Glob(filepath.Join(m.DataDir, "layers", "layer-*"))
+	for _, d := range dirs {
+		if _, err := m.Store.GetLayer(ctx, filepath.Base(d)); errors.Is(err, store.ErrNotFound) {
+			os.RemoveAll(d)
+			rep.Orphans = append(rep.Orphans, filepath.Base(d))
+		}
+	}
+	m.gc(ctx)
 	return rep, errors.Join(errs...)
 }
 

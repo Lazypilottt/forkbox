@@ -37,6 +37,16 @@ service Forkbox {
   // Forks a running sandbox into n children that continue from its state.
   // The parent is paused only for the diff snapshot and the disk copies.
   rpc ForkSandbox(ForkSandboxRequest) returns (ForkSandboxResponse);
+  // Checkpoints: a named memory layer plus a disk copy. They outlive the
+  // sandbox until deleted.
+  rpc CreateCheckpoint(CreateCheckpointRequest) returns (Checkpoint);
+  rpc ListCheckpoints(ListCheckpointsRequest) returns (ListCheckpointsResponse);
+  // Restores a checkpoint into a fresh VM with the same sandbox id, network
+  // slot and port forwards; the old VM is stopped.
+  rpc RewindSandbox(RewindSandboxRequest) returns (Sandbox);
+  // Creates a separate sandbox from a checkpoint.
+  rpc RestoreCheckpoint(RestoreCheckpointRequest) returns (Sandbox);
+  rpc DeleteCheckpoint(DeleteCheckpointRequest) returns (DeleteCheckpointResponse);
 }
 
 message Sandbox {
@@ -171,6 +181,47 @@ message ForkSandboxResponse {
   ForkTimings timings = 2;
   string layer = 3; // the memory layer the children were restored from
 }
+
+message Checkpoint {
+  string id = 1;
+  string sandbox_id = 2;
+  string name = 3;
+  string layer = 4;
+  int64 created_at_unix_ms = 5;
+  double paused_ms = 6;  // only when just created
+  uint64 dirty_bytes = 7; // only when just created
+}
+
+message CreateCheckpointRequest {
+  string sandbox_id = 1;
+  string name = 2;
+}
+
+message ListCheckpointsRequest {
+  string sandbox_id = 1; // empty: all
+}
+
+message ListCheckpointsResponse {
+  repeated Checkpoint checkpoints = 1;
+}
+
+message RewindSandboxRequest {
+  string sandbox_id = 1;
+  string name = 2; // or the checkpoint id
+}
+
+message RestoreCheckpointRequest {
+  string sandbox_id = 1; // the sandbox it was taken from (with a name)
+  string name = 2;       // a name, or the checkpoint id
+  uint64 ttl_s = 3;
+}
+
+message DeleteCheckpointRequest {
+  string sandbox_id = 1;
+  string name = 2; // or the checkpoint id
+}
+
+message DeleteCheckpointResponse {}
 
 message ExposePortResponse {
   string host = 1;      // address the forward listens on

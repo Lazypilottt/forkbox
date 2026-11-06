@@ -97,7 +97,6 @@ func (m *Manager) Fork(ctx context.Context, parentID string, n, concurrency int)
 
 	res := &ForkResult{Layer: "layer-" + randHex(8)}
 	layerDir := filepath.Join(m.DataDir, "layers", res.Layer)
-	diffDir := filepath.Join(parent.Dir, "diff-"+res.Layer)
 	// Children are recorded before the pause, so the pause stays short and
 	// a reaper can always find them.
 	var children []*Created
@@ -107,7 +106,6 @@ func (m *Manager) Fork(ctx context.Context, parentID string, n, concurrency int)
 			errs = append(errs, m.cleanup(context.WithoutCancel(ctx), c.ID, c.Dir))
 			_ = m.Store.DeleteSandbox(context.WithoutCancel(ctx), c.ID)
 		}
-		os.RemoveAll(diffDir)
 		return nil, errors.Join(append([]error{fmt.Errorf("fork %s: %w", parentID, err)}, errs...)...)
 	}
 	for i := 0; i < n; i++ {
@@ -126,88 +124,13 @@ func (m *Manager) Fork(ctx context.Context, parentID string, n, concurrency int)
 		}
 	}
 
-	// The parent is paused from here to Resume.
-	tPause := time.Now()
-	if err := v.Pause(ctx); err != nil {
-		return fail(err)
-	}
-	res.Timings.Pause = time.Since(tPause)
-	resumed := false
-	defer func() {
-		if !resumed {
-			_ = v.Resume(context.WithoutCancel(ctx))
-		}
-	}()
-	t := time.Now()
-	if _, err := v.SnapshotDiff(ctx, diffDir); err != nil {
-		return fail(err)
-	}
-	res.Timings.Snapshot = time.Since(t)
-	t = time.Now()
-	parentDisk := filepath.Join(parent.Dir, DiskFile)
+	var disks []string
 	for _, c := range children {
-		if err := storage.Reflink(parentDisk, filepath.Join(c.Dir, DiskFile)); err != nil {
-			return fail(err)
-		}
+		disks = append(disks, filepath.Join(c.Dir, DiskFile))
 	}
-	res.Timings.Disks = time.Since(t)
-	t = time.Now()
-	if err := v.Resume(ctx); err != nil {
+	if err := m.snapshotLayer(ctx, parent, v, baseMem, res.Layer, disks, &res.Timings); err != nil {
 		return fail(err)
 	}
-	resumed = true
-	res.Timings.Resume = time.Since(t)
-	res.Timings.ParentPaused = time.Since(tPause)
-
-	// Merge the diff onto the parent's base: the new layer.
-	t = time.Now()
-	if err := os.MkdirAll(layerDir, 0o755); err != nil {
-		return fail(err)
-	}
-	st, err := storage.MergeDiff(baseMem, filepath.Join(diffDir, vm.SnapshotMemFile), filepath.Join(layerDir, vm.SnapshotMemFile))
-	if err != nil {
-		os.RemoveAll(layerDir)
-		return fail(err)
-	}
-	res.Timings.DiffBytes, res.Timings.DirtyBytes, res.Timings.ClonedBytes = st.DiffAllocate, st.Bytes, st.ClonedBytes
-	if err := os.Rename(filepath.Join(diffDir, vm.SnapshotStateFile), filepath.Join(layerDir, vm.SnapshotStateFile)); err != nil {
-		os.RemoveAll(layerDir)
-		return fail(err)
-	}
-	diffMeta, err := vm.ReadSnapshot(diffDir)
-	if err != nil {
-		os.RemoveAll(layerDir)
-		return fail(err)
-	}
-	full := *diffMeta
-	full.Type, full.CreatedAt = vm.SnapshotFull, time.Now().UTC()
-	if err := vm.WriteSnapshotMeta(layerDir, &full); err != nil {
-		os.RemoveAll(layerDir)
-		return fail(err)
-	}
-	for _, f := range []string{vm.SnapshotMemFile, vm.SnapshotStateFile} {
-		p := filepath.Join(layerDir, f)
-		// Read-only, readable by the jail group: children map it.
-		if err := os.Lchown(p, 0, vm.DefaultGID); err != nil && !errors.Is(err, os.ErrPermission) {
-			return fail(err)
-		}
-		if err := os.Chmod(p, 0o440); err != nil {
-			return fail(err)
-		}
-	}
-	os.RemoveAll(diffDir)
-	if err := m.Store.InsertLayer(ctx, &store.Layer{
-		ID: res.Layer, Parent: parent.BaseLayer, Kind: store.LayerFork, Dir: layerDir,
-		Mem: filepath.Join(layerDir, vm.SnapshotMemFile), DirtyBytes: st.Bytes, SourceSandbox: parentID,
-	}); err != nil {
-		return fail(err)
-	}
-	// The parent's dirty tracking was reset by the snapshot: its next diff
-	// is relative to this layer.
-	if err := m.Store.SetBaseLayer(ctx, parentID, res.Layer); err != nil {
-		return fail(err)
-	}
-	res.Timings.Merge = time.Since(t)
 
 	// Restore the children, at most concurrency at a time.
 	sem := make(chan struct{}, concurrency)
@@ -233,8 +156,9 @@ func (m *Manager) Fork(ctx context.Context, parentID string, n, concurrency int)
 	}
 	res.Children = children
 	res.Timings.Total = time.Since(start)
+	m.gc(ctx) // the parent's previous base may now be unused
 	m.Log.Printf("fork %s into %d (layer %s): paused %s, diff %.1f MiB, merge %s, total %s", parentID, n, res.Layer,
-		res.Timings.ParentPaused.Round(time.Microsecond), float64(st.Bytes)/(1<<20), res.Timings.Merge.Round(time.Millisecond),
+		res.Timings.ParentPaused.Round(time.Microsecond), float64(res.Timings.DirtyBytes)/(1<<20), res.Timings.Merge.Round(time.Millisecond),
 		res.Timings.Total.Round(time.Millisecond))
 	return res, nil
 }
@@ -289,4 +213,96 @@ func randHex(n int) string {
 	b := make([]byte, n)
 	_, _ = rand.Read(b)
 	return hex.EncodeToString(b)
+}
+
+// snapshotLayer captures sb's state as a new memory layer: pause, diff
+// snapshot, a reflink of the disk to each of disks, resume, then merge the
+// diff onto the base memory. The layer becomes sb's base (its dirty
+// tracking was reset by the snapshot). The parent is paused only until the
+// disk copies exist.
+func (m *Manager) snapshotLayer(ctx context.Context, sb *store.Sandbox, v *vm.VM, baseMem, layerID string, disks []string, tm *ForkTimings) error {
+	layerDir := filepath.Join(m.DataDir, "layers", layerID)
+	diffDir := filepath.Join(sb.Dir, "diff-"+layerID)
+	defer os.RemoveAll(diffDir)
+	tPause := time.Now()
+	if err := v.Pause(ctx); err != nil {
+		return err
+	}
+	tm.Pause = time.Since(tPause)
+	resumed := false
+	defer func() {
+		if !resumed {
+			_ = v.Resume(context.WithoutCancel(ctx))
+		}
+	}()
+	t := time.Now()
+	if _, err := v.SnapshotDiff(ctx, diffDir); err != nil {
+		return err
+	}
+	tm.Snapshot = time.Since(t)
+	t = time.Now()
+	src := filepath.Join(sb.Dir, DiskFile)
+	for _, d := range disks {
+		if err := storage.Reflink(src, d); err != nil {
+			return err
+		}
+	}
+	tm.Disks = time.Since(t)
+	t = time.Now()
+	if err := v.Resume(ctx); err != nil {
+		return err
+	}
+	resumed = true
+	tm.Resume = time.Since(t)
+	tm.ParentPaused = time.Since(tPause)
+
+	t = time.Now()
+	ok := false
+	defer func() {
+		if !ok {
+			os.RemoveAll(layerDir)
+		}
+	}()
+	if err := os.MkdirAll(layerDir, 0o755); err != nil {
+		return err
+	}
+	st, err := storage.MergeDiff(baseMem, filepath.Join(diffDir, vm.SnapshotMemFile), filepath.Join(layerDir, vm.SnapshotMemFile))
+	if err != nil {
+		return err
+	}
+	tm.DiffBytes, tm.DirtyBytes, tm.ClonedBytes = st.DiffAllocate, st.Bytes, st.ClonedBytes
+	if err := os.Rename(filepath.Join(diffDir, vm.SnapshotStateFile), filepath.Join(layerDir, vm.SnapshotStateFile)); err != nil {
+		return err
+	}
+	diffMeta, err := vm.ReadSnapshot(diffDir)
+	if err != nil {
+		return err
+	}
+	full := *diffMeta
+	full.Type, full.CreatedAt = vm.SnapshotFull, time.Now().UTC()
+	if err := vm.WriteSnapshotMeta(layerDir, &full); err != nil {
+		return err
+	}
+	for _, f := range []string{vm.SnapshotMemFile, vm.SnapshotStateFile} {
+		p := filepath.Join(layerDir, f)
+		// Read-only, readable by the jail group: VMs map it.
+		if err := os.Lchown(p, 0, vm.DefaultGID); err != nil && !errors.Is(err, os.ErrPermission) {
+			return err
+		}
+		if err := os.Chmod(p, 0o440); err != nil {
+			return err
+		}
+	}
+	if err := m.Store.InsertLayer(ctx, &store.Layer{
+		ID: layerID, Parent: sb.BaseLayer, Kind: store.LayerFork, Dir: layerDir,
+		Mem: filepath.Join(layerDir, vm.SnapshotMemFile), DirtyBytes: st.Bytes, SourceSandbox: sb.ID,
+	}); err != nil {
+		return err
+	}
+	ok = true
+	if err := m.Store.SetBaseLayer(ctx, sb.ID, layerID); err != nil {
+		return err
+	}
+	tm.Merge = time.Since(t)
+	return nil
 }

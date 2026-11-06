@@ -34,6 +34,11 @@ type Backend interface {
 	Agent(id string) *agentclient.Client
 	Expose(ctx context.Context, id string, guestPort, hostPort int) (int, error)
 	Fork(ctx context.Context, id string, n, concurrency int) (*sandbox.ForkResult, error)
+	Checkpoint(ctx context.Context, id, name string) (*store.Checkpoint, *sandbox.ForkTimings, error)
+	Checkpoints(ctx context.Context, id string) ([]*store.Checkpoint, error)
+	Rewind(ctx context.Context, id, name string) (*sandbox.Created, error)
+	RestoreAsNew(ctx context.Context, sandboxID, nameOrID string, ttl time.Duration) (*sandbox.Created, error)
+	DeleteCheckpoint(ctx context.Context, sandboxID, nameOrID string) error
 }
 
 // Server implements the Forkbox gRPC service.
@@ -126,6 +131,56 @@ func (s *Server) ForkSandbox(ctx context.Context, r *pb.ForkSandboxRequest) (*pb
 		out.Children = append(out.Children, toPB(c.Sandbox))
 	}
 	return out, nil
+}
+
+func cpToPB(c *store.Checkpoint) *pb.Checkpoint {
+	return &pb.Checkpoint{Id: c.ID, SandboxId: c.SandboxID, Name: c.Name, Layer: c.Layer, CreatedAtUnixMs: c.CreatedAt.UnixMilli()}
+}
+
+func (s *Server) CreateCheckpoint(ctx context.Context, r *pb.CreateCheckpointRequest) (*pb.Checkpoint, error) {
+	cp, tm, err := s.B.Checkpoint(ctx, r.SandboxId, r.Name)
+	if err != nil {
+		return nil, toStatus(err)
+	}
+	out := cpToPB(cp)
+	out.PausedMs = float64(tm.ParentPaused.Microseconds()) / 1000
+	out.DirtyBytes = uint64(tm.DirtyBytes)
+	return out, nil
+}
+
+func (s *Server) ListCheckpoints(ctx context.Context, r *pb.ListCheckpointsRequest) (*pb.ListCheckpointsResponse, error) {
+	list, err := s.B.Checkpoints(ctx, r.SandboxId)
+	if err != nil {
+		return nil, toStatus(err)
+	}
+	out := &pb.ListCheckpointsResponse{}
+	for _, c := range list {
+		out.Checkpoints = append(out.Checkpoints, cpToPB(c))
+	}
+	return out, nil
+}
+
+func (s *Server) RewindSandbox(ctx context.Context, r *pb.RewindSandboxRequest) (*pb.Sandbox, error) {
+	c, err := s.B.Rewind(ctx, r.SandboxId, r.Name)
+	if err != nil {
+		return nil, toStatus(err)
+	}
+	return toPB(c.Sandbox), nil
+}
+
+func (s *Server) RestoreCheckpoint(ctx context.Context, r *pb.RestoreCheckpointRequest) (*pb.Sandbox, error) {
+	c, err := s.B.RestoreAsNew(ctx, r.SandboxId, r.Name, time.Duration(r.TtlS)*time.Second)
+	if err != nil {
+		return nil, toStatus(err)
+	}
+	return toPB(c.Sandbox), nil
+}
+
+func (s *Server) DeleteCheckpoint(ctx context.Context, r *pb.DeleteCheckpointRequest) (*pb.DeleteCheckpointResponse, error) {
+	if err := s.B.DeleteCheckpoint(ctx, r.SandboxId, r.Name); err != nil {
+		return nil, toStatus(err)
+	}
+	return &pb.DeleteCheckpointResponse{}, nil
 }
 
 // running returns the agent of a running sandbox.

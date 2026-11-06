@@ -1410,6 +1410,438 @@ func (x *ForkSandboxResponse) GetLayer() string {
 	return ""
 }
 
+type Checkpoint struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	Id              string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	SandboxId       string                 `protobuf:"bytes,2,opt,name=sandbox_id,json=sandboxId,proto3" json:"sandbox_id,omitempty"`
+	Name            string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
+	Layer           string                 `protobuf:"bytes,4,opt,name=layer,proto3" json:"layer,omitempty"`
+	CreatedAtUnixMs int64                  `protobuf:"varint,5,opt,name=created_at_unix_ms,json=createdAtUnixMs,proto3" json:"created_at_unix_ms,omitempty"`
+	PausedMs        float64                `protobuf:"fixed64,6,opt,name=paused_ms,json=pausedMs,proto3" json:"paused_ms,omitempty"`      // only when just created
+	DirtyBytes      uint64                 `protobuf:"varint,7,opt,name=dirty_bytes,json=dirtyBytes,proto3" json:"dirty_bytes,omitempty"` // only when just created
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *Checkpoint) Reset() {
+	*x = Checkpoint{}
+	mi := &file_forkbox_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Checkpoint) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Checkpoint) ProtoMessage() {}
+
+func (x *Checkpoint) ProtoReflect() protoreflect.Message {
+	mi := &file_forkbox_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Checkpoint.ProtoReflect.Descriptor instead.
+func (*Checkpoint) Descriptor() ([]byte, []int) {
+	return file_forkbox_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *Checkpoint) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *Checkpoint) GetSandboxId() string {
+	if x != nil {
+		return x.SandboxId
+	}
+	return ""
+}
+
+func (x *Checkpoint) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *Checkpoint) GetLayer() string {
+	if x != nil {
+		return x.Layer
+	}
+	return ""
+}
+
+func (x *Checkpoint) GetCreatedAtUnixMs() int64 {
+	if x != nil {
+		return x.CreatedAtUnixMs
+	}
+	return 0
+}
+
+func (x *Checkpoint) GetPausedMs() float64 {
+	if x != nil {
+		return x.PausedMs
+	}
+	return 0
+}
+
+func (x *Checkpoint) GetDirtyBytes() uint64 {
+	if x != nil {
+		return x.DirtyBytes
+	}
+	return 0
+}
+
+type CreateCheckpointRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SandboxId     string                 `protobuf:"bytes,1,opt,name=sandbox_id,json=sandboxId,proto3" json:"sandbox_id,omitempty"`
+	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateCheckpointRequest) Reset() {
+	*x = CreateCheckpointRequest{}
+	mi := &file_forkbox_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateCheckpointRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateCheckpointRequest) ProtoMessage() {}
+
+func (x *CreateCheckpointRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_forkbox_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateCheckpointRequest.ProtoReflect.Descriptor instead.
+func (*CreateCheckpointRequest) Descriptor() ([]byte, []int) {
+	return file_forkbox_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *CreateCheckpointRequest) GetSandboxId() string {
+	if x != nil {
+		return x.SandboxId
+	}
+	return ""
+}
+
+func (x *CreateCheckpointRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+type ListCheckpointsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SandboxId     string                 `protobuf:"bytes,1,opt,name=sandbox_id,json=sandboxId,proto3" json:"sandbox_id,omitempty"` // empty: all
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListCheckpointsRequest) Reset() {
+	*x = ListCheckpointsRequest{}
+	mi := &file_forkbox_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListCheckpointsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListCheckpointsRequest) ProtoMessage() {}
+
+func (x *ListCheckpointsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_forkbox_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListCheckpointsRequest.ProtoReflect.Descriptor instead.
+func (*ListCheckpointsRequest) Descriptor() ([]byte, []int) {
+	return file_forkbox_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *ListCheckpointsRequest) GetSandboxId() string {
+	if x != nil {
+		return x.SandboxId
+	}
+	return ""
+}
+
+type ListCheckpointsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Checkpoints   []*Checkpoint          `protobuf:"bytes,1,rep,name=checkpoints,proto3" json:"checkpoints,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListCheckpointsResponse) Reset() {
+	*x = ListCheckpointsResponse{}
+	mi := &file_forkbox_proto_msgTypes[24]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListCheckpointsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListCheckpointsResponse) ProtoMessage() {}
+
+func (x *ListCheckpointsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_forkbox_proto_msgTypes[24]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListCheckpointsResponse.ProtoReflect.Descriptor instead.
+func (*ListCheckpointsResponse) Descriptor() ([]byte, []int) {
+	return file_forkbox_proto_rawDescGZIP(), []int{24}
+}
+
+func (x *ListCheckpointsResponse) GetCheckpoints() []*Checkpoint {
+	if x != nil {
+		return x.Checkpoints
+	}
+	return nil
+}
+
+type RewindSandboxRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SandboxId     string                 `protobuf:"bytes,1,opt,name=sandbox_id,json=sandboxId,proto3" json:"sandbox_id,omitempty"`
+	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"` // or the checkpoint id
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RewindSandboxRequest) Reset() {
+	*x = RewindSandboxRequest{}
+	mi := &file_forkbox_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RewindSandboxRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RewindSandboxRequest) ProtoMessage() {}
+
+func (x *RewindSandboxRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_forkbox_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RewindSandboxRequest.ProtoReflect.Descriptor instead.
+func (*RewindSandboxRequest) Descriptor() ([]byte, []int) {
+	return file_forkbox_proto_rawDescGZIP(), []int{25}
+}
+
+func (x *RewindSandboxRequest) GetSandboxId() string {
+	if x != nil {
+		return x.SandboxId
+	}
+	return ""
+}
+
+func (x *RewindSandboxRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+type RestoreCheckpointRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SandboxId     string                 `protobuf:"bytes,1,opt,name=sandbox_id,json=sandboxId,proto3" json:"sandbox_id,omitempty"` // the sandbox it was taken from (with a name)
+	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`                            // a name, or the checkpoint id
+	TtlS          uint64                 `protobuf:"varint,3,opt,name=ttl_s,json=ttlS,proto3" json:"ttl_s,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RestoreCheckpointRequest) Reset() {
+	*x = RestoreCheckpointRequest{}
+	mi := &file_forkbox_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RestoreCheckpointRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RestoreCheckpointRequest) ProtoMessage() {}
+
+func (x *RestoreCheckpointRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_forkbox_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RestoreCheckpointRequest.ProtoReflect.Descriptor instead.
+func (*RestoreCheckpointRequest) Descriptor() ([]byte, []int) {
+	return file_forkbox_proto_rawDescGZIP(), []int{26}
+}
+
+func (x *RestoreCheckpointRequest) GetSandboxId() string {
+	if x != nil {
+		return x.SandboxId
+	}
+	return ""
+}
+
+func (x *RestoreCheckpointRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *RestoreCheckpointRequest) GetTtlS() uint64 {
+	if x != nil {
+		return x.TtlS
+	}
+	return 0
+}
+
+type DeleteCheckpointRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SandboxId     string                 `protobuf:"bytes,1,opt,name=sandbox_id,json=sandboxId,proto3" json:"sandbox_id,omitempty"`
+	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"` // or the checkpoint id
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteCheckpointRequest) Reset() {
+	*x = DeleteCheckpointRequest{}
+	mi := &file_forkbox_proto_msgTypes[27]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteCheckpointRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteCheckpointRequest) ProtoMessage() {}
+
+func (x *DeleteCheckpointRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_forkbox_proto_msgTypes[27]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteCheckpointRequest.ProtoReflect.Descriptor instead.
+func (*DeleteCheckpointRequest) Descriptor() ([]byte, []int) {
+	return file_forkbox_proto_rawDescGZIP(), []int{27}
+}
+
+func (x *DeleteCheckpointRequest) GetSandboxId() string {
+	if x != nil {
+		return x.SandboxId
+	}
+	return ""
+}
+
+func (x *DeleteCheckpointRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+type DeleteCheckpointResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteCheckpointResponse) Reset() {
+	*x = DeleteCheckpointResponse{}
+	mi := &file_forkbox_proto_msgTypes[28]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteCheckpointResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteCheckpointResponse) ProtoMessage() {}
+
+func (x *DeleteCheckpointResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_forkbox_proto_msgTypes[28]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteCheckpointResponse.ProtoReflect.Descriptor instead.
+func (*DeleteCheckpointResponse) Descriptor() ([]byte, []int) {
+	return file_forkbox_proto_rawDescGZIP(), []int{28}
+}
+
 type ExposePortResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Host          string                 `protobuf:"bytes,1,opt,name=host,proto3" json:"host,omitempty"` // address the forward listens on
@@ -1420,7 +1852,7 @@ type ExposePortResponse struct {
 
 func (x *ExposePortResponse) Reset() {
 	*x = ExposePortResponse{}
-	mi := &file_forkbox_proto_msgTypes[21]
+	mi := &file_forkbox_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1432,7 +1864,7 @@ func (x *ExposePortResponse) String() string {
 func (*ExposePortResponse) ProtoMessage() {}
 
 func (x *ExposePortResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_forkbox_proto_msgTypes[21]
+	mi := &file_forkbox_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1445,7 +1877,7 @@ func (x *ExposePortResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExposePortResponse.ProtoReflect.Descriptor instead.
 func (*ExposePortResponse) Descriptor() ([]byte, []int) {
-	return file_forkbox_proto_rawDescGZIP(), []int{21}
+	return file_forkbox_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *ExposePortResponse) GetHost() string {
@@ -1573,10 +2005,44 @@ const file_forkbox_proto_rawDesc = "" +
 	"\x13ForkSandboxResponse\x12/\n" +
 	"\bchildren\x18\x01 \x03(\v2\x13.forkbox.v1.SandboxR\bchildren\x121\n" +
 	"\atimings\x18\x02 \x01(\v2\x17.forkbox.v1.ForkTimingsR\atimings\x12\x14\n" +
-	"\x05layer\x18\x03 \x01(\tR\x05layer\"E\n" +
+	"\x05layer\x18\x03 \x01(\tR\x05layer\"\xd0\x01\n" +
+	"\n" +
+	"Checkpoint\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
+	"\n" +
+	"sandbox_id\x18\x02 \x01(\tR\tsandboxId\x12\x12\n" +
+	"\x04name\x18\x03 \x01(\tR\x04name\x12\x14\n" +
+	"\x05layer\x18\x04 \x01(\tR\x05layer\x12+\n" +
+	"\x12created_at_unix_ms\x18\x05 \x01(\x03R\x0fcreatedAtUnixMs\x12\x1b\n" +
+	"\tpaused_ms\x18\x06 \x01(\x01R\bpausedMs\x12\x1f\n" +
+	"\vdirty_bytes\x18\a \x01(\x04R\n" +
+	"dirtyBytes\"L\n" +
+	"\x17CreateCheckpointRequest\x12\x1d\n" +
+	"\n" +
+	"sandbox_id\x18\x01 \x01(\tR\tsandboxId\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\"7\n" +
+	"\x16ListCheckpointsRequest\x12\x1d\n" +
+	"\n" +
+	"sandbox_id\x18\x01 \x01(\tR\tsandboxId\"S\n" +
+	"\x17ListCheckpointsResponse\x128\n" +
+	"\vcheckpoints\x18\x01 \x03(\v2\x16.forkbox.v1.CheckpointR\vcheckpoints\"I\n" +
+	"\x14RewindSandboxRequest\x12\x1d\n" +
+	"\n" +
+	"sandbox_id\x18\x01 \x01(\tR\tsandboxId\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\"b\n" +
+	"\x18RestoreCheckpointRequest\x12\x1d\n" +
+	"\n" +
+	"sandbox_id\x18\x01 \x01(\tR\tsandboxId\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x13\n" +
+	"\x05ttl_s\x18\x03 \x01(\x04R\x04ttlS\"L\n" +
+	"\x17DeleteCheckpointRequest\x12\x1d\n" +
+	"\n" +
+	"sandbox_id\x18\x01 \x01(\tR\tsandboxId\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\"\x1a\n" +
+	"\x18DeleteCheckpointResponse\"E\n" +
 	"\x12ExposePortResponse\x12\x12\n" +
 	"\x04host\x18\x01 \x01(\tR\x04host\x12\x1b\n" +
-	"\thost_port\x18\x02 \x01(\rR\bhostPort2\xa7\x05\n" +
+	"\thost_port\x18\x02 \x01(\rR\bhostPort2\xcb\b\n" +
 	"\aForkbox\x12F\n" +
 	"\rCreateSandbox\x12 .forkbox.v1.CreateSandboxRequest\x1a\x13.forkbox.v1.Sandbox\x12@\n" +
 	"\n" +
@@ -1588,7 +2054,12 @@ const file_forkbox_proto_rawDesc = "" +
 	"\x0eDestroySandbox\x12!.forkbox.v1.DestroySandboxRequest\x1a\".forkbox.v1.DestroySandboxResponse\x12K\n" +
 	"\n" +
 	"ExposePort\x12\x1d.forkbox.v1.ExposePortRequest\x1a\x1e.forkbox.v1.ExposePortResponse\x12N\n" +
-	"\vForkSandbox\x12\x1e.forkbox.v1.ForkSandboxRequest\x1a\x1f.forkbox.v1.ForkSandboxResponseB0Z.github.com/Lazypilottt/forkbox/proto/forkboxpbb\x06proto3"
+	"\vForkSandbox\x12\x1e.forkbox.v1.ForkSandboxRequest\x1a\x1f.forkbox.v1.ForkSandboxResponse\x12O\n" +
+	"\x10CreateCheckpoint\x12#.forkbox.v1.CreateCheckpointRequest\x1a\x16.forkbox.v1.Checkpoint\x12Z\n" +
+	"\x0fListCheckpoints\x12\".forkbox.v1.ListCheckpointsRequest\x1a#.forkbox.v1.ListCheckpointsResponse\x12F\n" +
+	"\rRewindSandbox\x12 .forkbox.v1.RewindSandboxRequest\x1a\x13.forkbox.v1.Sandbox\x12N\n" +
+	"\x11RestoreCheckpoint\x12$.forkbox.v1.RestoreCheckpointRequest\x1a\x13.forkbox.v1.Sandbox\x12]\n" +
+	"\x10DeleteCheckpoint\x12#.forkbox.v1.DeleteCheckpointRequest\x1a$.forkbox.v1.DeleteCheckpointResponseB0Z.github.com/Lazypilottt/forkbox/proto/forkboxpbb\x06proto3"
 
 var (
 	file_forkbox_proto_rawDescOnce sync.Once
@@ -1602,30 +2073,38 @@ func file_forkbox_proto_rawDescGZIP() []byte {
 	return file_forkbox_proto_rawDescData
 }
 
-var file_forkbox_proto_msgTypes = make([]protoimpl.MessageInfo, 22)
+var file_forkbox_proto_msgTypes = make([]protoimpl.MessageInfo, 30)
 var file_forkbox_proto_goTypes = []any{
-	(*Sandbox)(nil),                // 0: forkbox.v1.Sandbox
-	(*CreateTimings)(nil),          // 1: forkbox.v1.CreateTimings
-	(*CreateSandboxRequest)(nil),   // 2: forkbox.v1.CreateSandboxRequest
-	(*GetSandboxRequest)(nil),      // 3: forkbox.v1.GetSandboxRequest
-	(*ListSandboxesRequest)(nil),   // 4: forkbox.v1.ListSandboxesRequest
-	(*ListSandboxesResponse)(nil),  // 5: forkbox.v1.ListSandboxesResponse
-	(*ExecRequest)(nil),            // 6: forkbox.v1.ExecRequest
-	(*ExecEvent)(nil),              // 7: forkbox.v1.ExecEvent
-	(*ExecStarted)(nil),            // 8: forkbox.v1.ExecStarted
-	(*ExecExit)(nil),               // 9: forkbox.v1.ExecExit
-	(*ReadFileRequest)(nil),        // 10: forkbox.v1.ReadFileRequest
-	(*FileChunk)(nil),              // 11: forkbox.v1.FileChunk
-	(*WriteFileHeader)(nil),        // 12: forkbox.v1.WriteFileHeader
-	(*WriteFileRequest)(nil),       // 13: forkbox.v1.WriteFileRequest
-	(*WriteFileResponse)(nil),      // 14: forkbox.v1.WriteFileResponse
-	(*DestroySandboxRequest)(nil),  // 15: forkbox.v1.DestroySandboxRequest
-	(*DestroySandboxResponse)(nil), // 16: forkbox.v1.DestroySandboxResponse
-	(*ExposePortRequest)(nil),      // 17: forkbox.v1.ExposePortRequest
-	(*ForkSandboxRequest)(nil),     // 18: forkbox.v1.ForkSandboxRequest
-	(*ForkTimings)(nil),            // 19: forkbox.v1.ForkTimings
-	(*ForkSandboxResponse)(nil),    // 20: forkbox.v1.ForkSandboxResponse
-	(*ExposePortResponse)(nil),     // 21: forkbox.v1.ExposePortResponse
+	(*Sandbox)(nil),                  // 0: forkbox.v1.Sandbox
+	(*CreateTimings)(nil),            // 1: forkbox.v1.CreateTimings
+	(*CreateSandboxRequest)(nil),     // 2: forkbox.v1.CreateSandboxRequest
+	(*GetSandboxRequest)(nil),        // 3: forkbox.v1.GetSandboxRequest
+	(*ListSandboxesRequest)(nil),     // 4: forkbox.v1.ListSandboxesRequest
+	(*ListSandboxesResponse)(nil),    // 5: forkbox.v1.ListSandboxesResponse
+	(*ExecRequest)(nil),              // 6: forkbox.v1.ExecRequest
+	(*ExecEvent)(nil),                // 7: forkbox.v1.ExecEvent
+	(*ExecStarted)(nil),              // 8: forkbox.v1.ExecStarted
+	(*ExecExit)(nil),                 // 9: forkbox.v1.ExecExit
+	(*ReadFileRequest)(nil),          // 10: forkbox.v1.ReadFileRequest
+	(*FileChunk)(nil),                // 11: forkbox.v1.FileChunk
+	(*WriteFileHeader)(nil),          // 12: forkbox.v1.WriteFileHeader
+	(*WriteFileRequest)(nil),         // 13: forkbox.v1.WriteFileRequest
+	(*WriteFileResponse)(nil),        // 14: forkbox.v1.WriteFileResponse
+	(*DestroySandboxRequest)(nil),    // 15: forkbox.v1.DestroySandboxRequest
+	(*DestroySandboxResponse)(nil),   // 16: forkbox.v1.DestroySandboxResponse
+	(*ExposePortRequest)(nil),        // 17: forkbox.v1.ExposePortRequest
+	(*ForkSandboxRequest)(nil),       // 18: forkbox.v1.ForkSandboxRequest
+	(*ForkTimings)(nil),              // 19: forkbox.v1.ForkTimings
+	(*ForkSandboxResponse)(nil),      // 20: forkbox.v1.ForkSandboxResponse
+	(*Checkpoint)(nil),               // 21: forkbox.v1.Checkpoint
+	(*CreateCheckpointRequest)(nil),  // 22: forkbox.v1.CreateCheckpointRequest
+	(*ListCheckpointsRequest)(nil),   // 23: forkbox.v1.ListCheckpointsRequest
+	(*ListCheckpointsResponse)(nil),  // 24: forkbox.v1.ListCheckpointsResponse
+	(*RewindSandboxRequest)(nil),     // 25: forkbox.v1.RewindSandboxRequest
+	(*RestoreCheckpointRequest)(nil), // 26: forkbox.v1.RestoreCheckpointRequest
+	(*DeleteCheckpointRequest)(nil),  // 27: forkbox.v1.DeleteCheckpointRequest
+	(*DeleteCheckpointResponse)(nil), // 28: forkbox.v1.DeleteCheckpointResponse
+	(*ExposePortResponse)(nil),       // 29: forkbox.v1.ExposePortResponse
 }
 var file_forkbox_proto_depIdxs = []int32{
 	1,  // 0: forkbox.v1.Sandbox.timings:type_name -> forkbox.v1.CreateTimings
@@ -1635,29 +2114,40 @@ var file_forkbox_proto_depIdxs = []int32{
 	12, // 4: forkbox.v1.WriteFileRequest.header:type_name -> forkbox.v1.WriteFileHeader
 	0,  // 5: forkbox.v1.ForkSandboxResponse.children:type_name -> forkbox.v1.Sandbox
 	19, // 6: forkbox.v1.ForkSandboxResponse.timings:type_name -> forkbox.v1.ForkTimings
-	2,  // 7: forkbox.v1.Forkbox.CreateSandbox:input_type -> forkbox.v1.CreateSandboxRequest
-	3,  // 8: forkbox.v1.Forkbox.GetSandbox:input_type -> forkbox.v1.GetSandboxRequest
-	4,  // 9: forkbox.v1.Forkbox.ListSandboxes:input_type -> forkbox.v1.ListSandboxesRequest
-	6,  // 10: forkbox.v1.Forkbox.Exec:input_type -> forkbox.v1.ExecRequest
-	10, // 11: forkbox.v1.Forkbox.ReadFile:input_type -> forkbox.v1.ReadFileRequest
-	13, // 12: forkbox.v1.Forkbox.WriteFile:input_type -> forkbox.v1.WriteFileRequest
-	15, // 13: forkbox.v1.Forkbox.DestroySandbox:input_type -> forkbox.v1.DestroySandboxRequest
-	17, // 14: forkbox.v1.Forkbox.ExposePort:input_type -> forkbox.v1.ExposePortRequest
-	18, // 15: forkbox.v1.Forkbox.ForkSandbox:input_type -> forkbox.v1.ForkSandboxRequest
-	0,  // 16: forkbox.v1.Forkbox.CreateSandbox:output_type -> forkbox.v1.Sandbox
-	0,  // 17: forkbox.v1.Forkbox.GetSandbox:output_type -> forkbox.v1.Sandbox
-	5,  // 18: forkbox.v1.Forkbox.ListSandboxes:output_type -> forkbox.v1.ListSandboxesResponse
-	7,  // 19: forkbox.v1.Forkbox.Exec:output_type -> forkbox.v1.ExecEvent
-	11, // 20: forkbox.v1.Forkbox.ReadFile:output_type -> forkbox.v1.FileChunk
-	14, // 21: forkbox.v1.Forkbox.WriteFile:output_type -> forkbox.v1.WriteFileResponse
-	16, // 22: forkbox.v1.Forkbox.DestroySandbox:output_type -> forkbox.v1.DestroySandboxResponse
-	21, // 23: forkbox.v1.Forkbox.ExposePort:output_type -> forkbox.v1.ExposePortResponse
-	20, // 24: forkbox.v1.Forkbox.ForkSandbox:output_type -> forkbox.v1.ForkSandboxResponse
-	16, // [16:25] is the sub-list for method output_type
-	7,  // [7:16] is the sub-list for method input_type
-	7,  // [7:7] is the sub-list for extension type_name
-	7,  // [7:7] is the sub-list for extension extendee
-	0,  // [0:7] is the sub-list for field type_name
+	21, // 7: forkbox.v1.ListCheckpointsResponse.checkpoints:type_name -> forkbox.v1.Checkpoint
+	2,  // 8: forkbox.v1.Forkbox.CreateSandbox:input_type -> forkbox.v1.CreateSandboxRequest
+	3,  // 9: forkbox.v1.Forkbox.GetSandbox:input_type -> forkbox.v1.GetSandboxRequest
+	4,  // 10: forkbox.v1.Forkbox.ListSandboxes:input_type -> forkbox.v1.ListSandboxesRequest
+	6,  // 11: forkbox.v1.Forkbox.Exec:input_type -> forkbox.v1.ExecRequest
+	10, // 12: forkbox.v1.Forkbox.ReadFile:input_type -> forkbox.v1.ReadFileRequest
+	13, // 13: forkbox.v1.Forkbox.WriteFile:input_type -> forkbox.v1.WriteFileRequest
+	15, // 14: forkbox.v1.Forkbox.DestroySandbox:input_type -> forkbox.v1.DestroySandboxRequest
+	17, // 15: forkbox.v1.Forkbox.ExposePort:input_type -> forkbox.v1.ExposePortRequest
+	18, // 16: forkbox.v1.Forkbox.ForkSandbox:input_type -> forkbox.v1.ForkSandboxRequest
+	22, // 17: forkbox.v1.Forkbox.CreateCheckpoint:input_type -> forkbox.v1.CreateCheckpointRequest
+	23, // 18: forkbox.v1.Forkbox.ListCheckpoints:input_type -> forkbox.v1.ListCheckpointsRequest
+	25, // 19: forkbox.v1.Forkbox.RewindSandbox:input_type -> forkbox.v1.RewindSandboxRequest
+	26, // 20: forkbox.v1.Forkbox.RestoreCheckpoint:input_type -> forkbox.v1.RestoreCheckpointRequest
+	27, // 21: forkbox.v1.Forkbox.DeleteCheckpoint:input_type -> forkbox.v1.DeleteCheckpointRequest
+	0,  // 22: forkbox.v1.Forkbox.CreateSandbox:output_type -> forkbox.v1.Sandbox
+	0,  // 23: forkbox.v1.Forkbox.GetSandbox:output_type -> forkbox.v1.Sandbox
+	5,  // 24: forkbox.v1.Forkbox.ListSandboxes:output_type -> forkbox.v1.ListSandboxesResponse
+	7,  // 25: forkbox.v1.Forkbox.Exec:output_type -> forkbox.v1.ExecEvent
+	11, // 26: forkbox.v1.Forkbox.ReadFile:output_type -> forkbox.v1.FileChunk
+	14, // 27: forkbox.v1.Forkbox.WriteFile:output_type -> forkbox.v1.WriteFileResponse
+	16, // 28: forkbox.v1.Forkbox.DestroySandbox:output_type -> forkbox.v1.DestroySandboxResponse
+	29, // 29: forkbox.v1.Forkbox.ExposePort:output_type -> forkbox.v1.ExposePortResponse
+	20, // 30: forkbox.v1.Forkbox.ForkSandbox:output_type -> forkbox.v1.ForkSandboxResponse
+	21, // 31: forkbox.v1.Forkbox.CreateCheckpoint:output_type -> forkbox.v1.Checkpoint
+	24, // 32: forkbox.v1.Forkbox.ListCheckpoints:output_type -> forkbox.v1.ListCheckpointsResponse
+	0,  // 33: forkbox.v1.Forkbox.RewindSandbox:output_type -> forkbox.v1.Sandbox
+	0,  // 34: forkbox.v1.Forkbox.RestoreCheckpoint:output_type -> forkbox.v1.Sandbox
+	28, // 35: forkbox.v1.Forkbox.DeleteCheckpoint:output_type -> forkbox.v1.DeleteCheckpointResponse
+	22, // [22:36] is the sub-list for method output_type
+	8,  // [8:22] is the sub-list for method input_type
+	8,  // [8:8] is the sub-list for extension type_name
+	8,  // [8:8] is the sub-list for extension extendee
+	0,  // [0:8] is the sub-list for field type_name
 }
 
 func init() { file_forkbox_proto_init() }
@@ -1681,7 +2171,7 @@ func file_forkbox_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_forkbox_proto_rawDesc), len(file_forkbox_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   22,
+			NumMessages:   30,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
