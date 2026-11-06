@@ -326,6 +326,10 @@ func (v *VM) prepareJail(extra func() error) error {
 		if err := v.m.o.chown(v.l.host(jailRootfs), v.m.o.UID, v.m.o.GID); err != nil {
 			return fmt.Errorf("rootfs: %w", err)
 		}
+		// A reflink of a read-only template keeps its 0444 mode.
+		if err := os.Chmod(v.l.host(jailRootfs), 0o600); err != nil {
+			return fmt.Errorf("rootfs: %w", err)
+		}
 	}
 	snap := v.l.host(jailSnapDir)
 	if err := os.Mkdir(snap, 0o700); err != nil {

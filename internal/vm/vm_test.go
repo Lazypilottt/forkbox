@@ -155,12 +155,16 @@ func TestBootWritableRootfsIsChowned(t *testing.T) {
 	m := h.manager(t, nil)
 	cfg := h.config(t)
 	cfg.Rootfs.ReadOnly = false
+	must(t, os.Chmod(cfg.Rootfs.Path, 0o444)) // as a reflink of a template is
 	v, err := m.Boot(ctx, cfg)
 	must(t, err)
 	defer v.Stop()
 	want := chownCall{layout{h.dataDir, v.ID()}.host(jailRootfs), DefaultUID, DefaultGID}
 	if !slices.Contains(h.chowns(), want) {
 		t.Errorf("writable rootfs not chowned to the jail user: %v", h.chowns())
+	}
+	if fi, _ := os.Stat(want.path); fi.Mode().Perm() != 0o600 {
+		t.Errorf("writable rootfs mode %v, want 0600", fi.Mode().Perm())
 	}
 }
 
