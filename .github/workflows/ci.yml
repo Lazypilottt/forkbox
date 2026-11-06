@@ -30,12 +30,13 @@ jobs:
         run: go run honnef.co/go/tools/cmd/staticcheck@${STATICCHECK_VERSION} ./...
       - name: unit tests
         run: go test -race ./...
-      # Python packages arrive in Task 6; this step starts running once they exist.
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
       - name: pytest
-        if: hashFiles('sdk/python/pyproject.toml') != ''
         run: |
-          python3 -m pip install -e 'sdk/python[test]'
-          python3 -m pytest sdk/python
+          python -m pip install -q -e 'sdk/python[test]'
+          python -m pytest -q sdk/python
 
   integration:
     name: integration tests (KVM)
@@ -98,6 +99,31 @@ jobs:
           sudo -n bin/forkbox templates inspect node
       - name: integration tests
         run: make integration GOTESTFLAGS="-v -timeout 40m"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: forkboxd
+        run: |
+          python -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/pip" install -q -e 'sdk/python[test]'
+          sudo -n sh -c 'bin/forkboxd > /var/lib/forkbox/forkboxd.log 2>&1 &'
+          for i in $(seq 1 50); do sudo -n test -S /var/lib/forkbox/run/forkboxd.sock && break; sleep 0.2; done
+          sudo -n stat -c '%a %U %n' /var/lib/forkbox/run /var/lib/forkbox/run/forkboxd.sock
+      - name: SDK against the daemon
+        run: sudo -n env FORKBOX_INTEGRATION=1 "$RUNNER_TEMP/venv/bin/python" -m pytest -v -m integration sdk/python
+      - name: README quick start
+        run: sudo -n "$RUNNER_TEMP/venv/bin/python" examples/quickstart.py
+      - name: bench/restore.py
+        run: sudo -n "$RUNNER_TEMP/venv/bin/python" bench/restore.py --runs 100
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bench-results
+          path: bench/results/
+          if-no-files-found: ignore
+      - name: forkboxd log
+        if: always()
+        run: sudo -n cat /var/lib/forkbox/forkboxd.log || true
       - name: doctor in a container without /dev/kvm
         run: |
           CGO_ENABLED=0 go build -o bin/forkbox-static ./cmd/forkbox

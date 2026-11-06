@@ -1,0 +1,37 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "forkbox"
+version = "0.1.0"
+description = "Python SDK for Forkbox: Firecracker sandboxes that fork in milliseconds"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.12"
+authors = [{ name = "Aditya" }]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.12",
+  "Operating System :: POSIX :: Linux",
+  "Typing :: Typed",
+]
+dependencies = [
+  # The generated stubs check these at import time.
+  "grpcio>=1.85.1",
+  "protobuf>=7.35.1,<8",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8"]
+dev = ["pytest>=8", "grpcio-tools>=1.85.1"]
+
+[project.urls]
+Source = "https://github.com/Lazypilottt/forkbox"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/forkbox"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["integration: needs a running forkboxd on a KVM host (FORKBOX_INTEGRATION=1)"]

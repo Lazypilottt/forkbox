@@ -1,7 +1,8 @@
 # Forkbox
 
-> **Status: early development.** Only `forkbox doctor` and `forkbox setup`
-> exist so far. See [PROGRESS.md](PROGRESS.md).
+> **Status: early development (v0.1 in progress).** Templates, sandboxes, the
+> daemon and the Python SDK work; fork, checkpoints and networking come next.
+> See [PROGRESS.md](PROGRESS.md).
 
 ## What it is
 
@@ -33,15 +34,47 @@ Pinned components ([versions.yaml](versions.yaml)):
 
 ## Quick start
 
-So far, only host preparation:
+On the KVM host, as root:
 
 ```sh
-go build -o forkbox ./cmd/forkbox
-sudo ./forkbox setup     # download and verify Firecracker, the jailer and the guest kernel
-./forkbox doctor         # one PASS or FAIL line per check, each failure with its fix
+make build                                   # bin/forkbox, bin/forkboxd, bin/forkbox-agent
+sudo bin/forkbox setup                       # download and verify Firecracker, jailer, guest kernel
+sudo bin/forkbox doctor                      # one PASS or FAIL line per check, with fixes
+sudo bin/forkbox templates build templates/python.yaml
+sudo bin/forkboxd &                          # gRPC on /var/lib/forkbox/run/forkboxd.sock
+python3.12 -m venv .venv && .venv/bin/pip install -e sdk/python
+sudo .venv/bin/python examples/quickstart.py
 ```
 
-The sandbox quick start (create, exec, fork) arrives with the Python SDK.
+[examples/quickstart.py](examples/quickstart.py):
+
+```python
+from forkbox import Sandbox
+
+with Sandbox.create("python", ttl=600) as sb:
+    print(f"sandbox {sb.id} ready in {sb.timings.total_ms:.0f} ms")
+
+    r = sb.exec("python -c 'import numpy; print(numpy.arange(10).sum())'")
+    print(r.exit_code, r.stdout.strip())  # 0 45
+
+    for ev in sb.exec_stream("for i in 1 2 3; do echo tick $i; sleep 0.5; done"):
+        if ev.kind == "stdout":
+            print(ev.data.decode(), end="")
+
+    sb.fs.write("/root/hello.py", "print('hello from the sandbox')\n")
+    print(sb.exec("python /root/hello.py").stdout, end="")
+# Leaving the block destroys the sandbox.
+```
+
+The daemon's sockets are owner-only (root). For remote clients, start it with
+`--grpc-tcp ADDR --token-file FILE` and set `FORKBOX_ADDR` and `FORKBOX_TOKEN`.
+An HTTP gateway with server-sent events for exec listens on
+`/var/lib/forkbox/run/forkboxd-http.sock`:
+
+```sh
+sudo curl --unix-socket /var/lib/forkbox/run/forkboxd-http.sock -X POST \
+     -d '{"template":"python"}' http://forkbox/v1/sandboxes
+```
 
 ## How forking works
 

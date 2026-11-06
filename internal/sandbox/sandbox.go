@@ -102,14 +102,14 @@ func (m *Manager) Create(ctx context.Context, o CreateOptions) (*Created, error)
 		if _, err := rand.Read(b); err != nil {
 			return nil, err
 		}
-		id = "sb-" + hex.EncodeToString(b)
+		id = IDPrefix + hex.EncodeToString(b)
 	}
 	if !vm.ValidID(id) {
 		return nil, fmt.Errorf("sandbox id %q: use 1-32 lowercase letters, digits and hyphens", id)
 	}
 	dir := Dir(m.DataDir, id)
 	rec := &store.Sandbox{
-		ID: id, Template: tpl.ID, State: store.StateCreating, Dir: dir,
+		ID: id, Template: tpl.ID, TemplateName: tpl.Name, State: store.StateCreating, Dir: dir,
 		Jail: vm.JailDir(m.DataDir, id), Cgroup: m.VMs.CgroupPath(id),
 		Vsock: vm.VsockSocketPath(m.DataDir, id), TTL: o.TTL,
 	}
@@ -242,4 +242,98 @@ func (m *Manager) cleanup(_ context.Context, id, dir string) error {
 		errs = append(errs, err)
 	}
 	return errors.Join(errs...)
+}
+
+// Get returns a sandbox's record.
+func (m *Manager) Get(ctx context.Context, id string) (*store.Sandbox, error) {
+	return m.Store.GetSandbox(ctx, id)
+}
+
+// List returns every sandbox record.
+func (m *Manager) List(ctx context.Context) ([]*store.Sandbox, error) {
+	return m.Store.ListSandboxes(ctx)
+}
+
+// RecoverReport says what Recover did.
+type RecoverReport struct {
+	Adopted []string // running VMs kept, now driven by id
+	Reaped  []string // records whose VM was gone or half-made, removed
+	Orphans []string // jails, cgroups or dirs with no record, removed
+}
+
+// Recover runs when the daemon starts. A sandbox whose Firecracker process
+// is still alive is adopted: everything else needs only its id (the agent
+// socket and the jail paths are derived from it). A sandbox whose process
+// is gone, or that was stuck creating or destroying, is reaped. Then any
+// sandbox jail, cgroup or directory without a record is removed.
+func (m *Manager) Recover(ctx context.Context) (*RecoverReport, error) {
+	rep := &RecoverReport{}
+	recs, err := m.Store.ListSandboxes(ctx)
+	if err != nil {
+		return nil, err
+	}
+	known := map[string]bool{}
+	var errs []error
+	for _, r := range recs {
+		known[r.ID] = true
+		if r.State == store.StateRunning && vm.Alive(r.Pid, r.ID) {
+			rep.Adopted = append(rep.Adopted, r.ID)
+			continue
+		}
+		if err := m.cleanup(ctx, r.ID, r.Dir); err != nil {
+			errs = append(errs, fmt.Errorf("reap %s: %w", r.ID, err))
+			continue
+		}
+		if err := m.Store.DeleteSandbox(ctx, r.ID); err != nil {
+			errs = append(errs, err)
+		}
+		rep.Reaped = append(rep.Reaped, r.ID)
+	}
+	candidates := map[string]bool{}
+	for _, glob := range []string{
+		filepath.Join(m.DataDir, "sandboxes", IDPrefix+"*"),
+		filepath.Join(vm.JailBase(m.DataDir), "firecracker", IDPrefix+"*"),
+		filepath.Join(filepath.Dir(m.VMs.CgroupPath("x")), IDPrefix+"*"),
+		filepath.Join(m.DataDir, "vms", IDPrefix+"*"),
+	} {
+		paths, _ := filepath.Glob(glob)
+		for _, p := range paths {
+			candidates[filepath.Base(p)] = true
+		}
+	}
+	for id := range candidates {
+		if known[id] || !vm.ValidID(id) {
+			continue
+		}
+		if err := m.cleanup(ctx, id, Dir(m.DataDir, id)); err != nil {
+			errs = append(errs, fmt.Errorf("orphan %s: %w", id, err))
+			continue
+		}
+		rep.Orphans = append(rep.Orphans, id)
+	}
+	return rep, errors.Join(errs...)
+}
+
+// IDPrefix starts every generated sandbox id; Recover only touches
+// resources with this prefix (template builds use "build-").
+const IDPrefix = "sb-"
+
+// ExpireOnce destroys every sandbox whose TTL has run out at now.
+func (m *Manager) ExpireOnce(ctx context.Context, now time.Time) ([]string, error) {
+	recs, err := m.Store.ListSandboxes(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var done []string
+	var errs []error
+	for _, r := range recs {
+		if r.Expired(now) && r.State == store.StateRunning {
+			if err := m.Destroy(ctx, r.ID); err != nil {
+				errs = append(errs, err)
+				continue
+			}
+			done = append(done, r.ID)
+		}
+	}
+	return done, errors.Join(errs...)
 }

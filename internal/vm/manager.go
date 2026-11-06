@@ -341,6 +341,10 @@ func readPidFile(path string) int {
 	return pid
 }
 
+// Alive reports whether pid is the jailed Firecracker of VM id (and not a
+// recycled pid).
+func Alive(pid int, id string) bool { return pid > 0 && isJailedFirecracker(pid, id) }
+
 // isJailedFirecracker guards against pid reuse: the jailer passes --id=<id>
 // to Firecracker, so its command line names the VM.
 func isJailedFirecracker(pid int, id string) bool {

@@ -38,6 +38,7 @@ var migrations = []string{
 		error      TEXT NOT NULL DEFAULT ''
 	);
 	CREATE INDEX sandboxes_state ON sandboxes(state);`,
+	`ALTER TABLE sandboxes ADD COLUMN template_name TEXT NOT NULL DEFAULT '';`,
 }
 
 // Open opens (creating if needed) the database at path and migrates it.
@@ -97,19 +98,20 @@ const (
 
 // Sandbox is one sandbox record.
 type Sandbox struct {
-	ID        string
-	Template  string // template id
-	Parent    string // sandbox it was forked from (Task 8)
-	State     string
-	Dir       string // <data>/sandboxes/<id>: disk and per-sandbox files
-	Jail      string // the VM's jail directory
-	Cgroup    string
-	Vsock     string // host path of the vsock socket
-	Pid       int
-	CreatedAt time.Time
-	UpdatedAt time.Time
-	TTL       time.Duration // 0: no expiry
-	Error     string        // why it failed, for StateFailed
+	ID           string
+	Template     string // template id
+	TemplateName string
+	Parent       string // sandbox it was forked from (Task 8)
+	State        string
+	Dir          string // <data>/sandboxes/<id>: disk and per-sandbox files
+	Jail         string // the VM's jail directory
+	Cgroup       string
+	Vsock        string // host path of the vsock socket
+	Pid          int
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+	TTL          time.Duration // 0: no expiry
+	Error        string        // why it failed, for StateFailed
 }
 
 // Expired reports whether the sandbox's TTL has run out at now.
@@ -131,9 +133,9 @@ func (s *Store) InsertSandbox(ctx context.Context, sb *Sandbox) error {
 	}
 	sb.UpdatedAt = now
 	_, err := s.db.ExecContext(ctx, `INSERT INTO sandboxes
-		(id, template, parent, state, dir, jail, cgroup, vsock, pid, created_at, updated_at, ttl_s, error)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		sb.ID, sb.Template, sb.Parent, sb.State, sb.Dir, sb.Jail, sb.Cgroup, sb.Vsock, sb.Pid,
+		(id, template, template_name, parent, state, dir, jail, cgroup, vsock, pid, created_at, updated_at, ttl_s, error)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		sb.ID, sb.Template, sb.TemplateName, sb.Parent, sb.State, sb.Dir, sb.Jail, sb.Cgroup, sb.Vsock, sb.Pid,
 		sb.CreatedAt.UnixNano(), sb.UpdatedAt.UnixNano(), int64(sb.TTL/time.Second), sb.Error)
 	if err != nil && isConstraint(err) {
 		return fmt.Errorf("%w: %s", ErrExists, sb.ID)
@@ -185,7 +187,7 @@ func (s *Store) ListSandboxes(ctx context.Context) ([]*Sandbox, error) {
 	return scanSandboxes(rows)
 }
 
-const selectSandbox = `SELECT id, template, parent, state, dir, jail, cgroup, vsock, pid, created_at, updated_at, ttl_s, error FROM sandboxes`
+const selectSandbox = `SELECT id, template, template_name, parent, state, dir, jail, cgroup, vsock, pid, created_at, updated_at, ttl_s, error FROM sandboxes`
 
 func scanSandboxes(rows *sql.Rows) ([]*Sandbox, error) {
 	defer rows.Close()
@@ -193,7 +195,7 @@ func scanSandboxes(rows *sql.Rows) ([]*Sandbox, error) {
 	for rows.Next() {
 		var sb Sandbox
 		var created, updated, ttl int64
-		if err := rows.Scan(&sb.ID, &sb.Template, &sb.Parent, &sb.State, &sb.Dir, &sb.Jail, &sb.Cgroup,
+		if err := rows.Scan(&sb.ID, &sb.Template, &sb.TemplateName, &sb.Parent, &sb.State, &sb.Dir, &sb.Jail, &sb.Cgroup,
 			&sb.Vsock, &sb.Pid, &created, &updated, &ttl, &sb.Error); err != nil {
 			return nil, err
 		}

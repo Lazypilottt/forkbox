@@ -1,0 +1,136 @@
+// The forkboxd API (gRPC; Unix socket by default).
+//
+// Error codes, for every RPC:
+//   NOT_FOUND            no such sandbox or template, or a missing guest file
+//   INVALID_ARGUMENT     a malformed request: bad id, empty command, relative path
+//   FAILED_PRECONDITION  the sandbox is not running (creating, destroying, failed)
+//   ALREADY_EXISTS       the sandbox id is taken
+//   RESOURCE_EXHAUSTED   the host cannot take another sandbox
+//   DEADLINE_EXCEEDED    the guest agent did not answer in time
+//   UNAVAILABLE          the guest agent cannot be reached
+//   UNAUTHENTICATED      missing or wrong bearer token (TCP listener only)
+//   INTERNAL             anything else; the message says what failed
+syntax = "proto3";
+
+package forkbox.v1;
+
+option go_package = "github.com/Lazypilottt/forkbox/proto/forkboxpb";
+
+service Forkbox {
+  // Restores a sandbox from a template's base snapshot. Returns once the
+  // guest agent answers, with per-step timings.
+  rpc CreateSandbox(CreateSandboxRequest) returns (Sandbox);
+  rpc GetSandbox(GetSandboxRequest) returns (Sandbox);
+  rpc ListSandboxes(ListSandboxesRequest) returns (ListSandboxesResponse);
+  // Runs a command; streams started, then stdout/stderr chunks, then exit.
+  // Cancelling the call kills the command's process group in the guest.
+  rpc Exec(ExecRequest) returns (stream ExecEvent);
+  // Streams a guest file; the last message carries its size and SHA-256.
+  rpc ReadFile(ReadFileRequest) returns (stream FileChunk);
+  // First message is the header, then data chunks. The file appears in the
+  // guest only once complete.
+  rpc WriteFile(stream WriteFileRequest) returns (WriteFileResponse);
+  rpc DestroySandbox(DestroySandboxRequest) returns (DestroySandboxResponse);
+}
+
+message Sandbox {
+  string id = 1;
+  string template = 2;    // template name
+  string template_id = 3; // content-addressed template id
+  string parent = 4;      // sandbox it was forked from, if any
+  string state = 5;       // creating, running, destroying, failed
+  int64 created_at_unix_ms = 6;
+  uint64 ttl_s = 7;       // 0: no expiry
+  int32 pid = 8;          // Firecracker process on the host
+  CreateTimings timings = 9; // only in the CreateSandbox answer
+}
+
+message CreateTimings {
+  double total_ms = 1;
+  double disk_ms = 2;     // reflink of the template disk
+  double restore_ms = 3;  // jail + snapshot load
+  double resume_ms = 4;
+  double agent_ms = 5;    // until the guest agent answered
+  double identity_ms = 6; // reseed, machine-id, hostname, clock
+}
+
+message CreateSandboxRequest {
+  string template = 1; // name or id
+  uint64 ttl_s = 2;
+}
+
+message GetSandboxRequest {
+  string id = 1;
+}
+
+message ListSandboxesRequest {}
+
+message ListSandboxesResponse {
+  repeated Sandbox sandboxes = 1;
+}
+
+message ExecRequest {
+  string sandbox_id = 1;
+  repeated string args = 2; // argv; use ["sh", "-c", "..."] for a shell
+  repeated string env = 3;  // KEY=value
+  string cwd = 4;
+  uint64 timeout_ms = 5;    // 0: none
+}
+
+message ExecEvent {
+  oneof event {
+    ExecStarted started = 1;
+    bytes stdout = 2;
+    bytes stderr = 3;
+    ExecExit exit = 4;
+  }
+}
+
+message ExecStarted {
+  string exec_id = 1;
+  int32 pid = 2;
+}
+
+message ExecExit {
+  int32 exit_code = 1; // -1 if killed by a signal
+  string signal = 2;
+  bool timed_out = 3;
+  double duration_ms = 4;
+}
+
+message ReadFileRequest {
+  string sandbox_id = 1;
+  string path = 2; // absolute
+}
+
+message FileChunk {
+  bytes data = 1;
+  bool last = 2;    // set on the final message
+  uint64 size = 3;  // final message only
+  bytes sha256 = 4; // final message only
+}
+
+message WriteFileHeader {
+  string sandbox_id = 1;
+  string path = 2;  // absolute
+  uint32 mode = 3;  // 0: 0644
+  bool make_parents = 4;
+}
+
+message WriteFileRequest {
+  oneof msg {
+    WriteFileHeader header = 1;
+    bytes data = 2;
+  }
+}
+
+message WriteFileResponse {
+  uint64 size = 1;
+  bytes sha256 = 2;
+}
+
+message DestroySandboxRequest {
+  string id = 1;
+}
+
+message DestroySandboxResponse {}
