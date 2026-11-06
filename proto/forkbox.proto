@@ -34,6 +34,9 @@ service Forkbox {
   // Forwards a host TCP port to a guest port (for previews). host_port 0
   // picks a free port. Forwards end when the sandbox is destroyed.
   rpc ExposePort(ExposePortRequest) returns (ExposePortResponse);
+  // Forks a running sandbox into n children that continue from its state.
+  // The parent is paused only for the diff snapshot and the disk copies.
+  rpc ForkSandbox(ForkSandboxRequest) returns (ForkSandboxResponse);
 }
 
 message Sandbox {
@@ -142,6 +145,31 @@ message ExposePortRequest {
   string sandbox_id = 1;
   uint32 guest_port = 2;
   uint32 host_port = 3; // 0: any free port
+}
+
+message ForkSandboxRequest {
+  string id = 1;
+  uint32 n = 2;           // 1 to 256
+  uint32 concurrency = 3; // parallel restores; 0: one per host CPU
+}
+
+message ForkTimings {
+  double pause_ms = 1;
+  double snapshot_ms = 2;      // diff snapshot
+  double disks_ms = 3;         // reflinks of the parent's disk
+  double resume_ms = 4;
+  double parent_paused_ms = 5; // pause through resume
+  double merge_ms = 6;         // diff onto the parent's base layer
+  repeated double restore_ms = 7; // per child, until its agent is ready
+  double total_ms = 8;
+  uint64 diff_bytes = 9;       // allocated size of the diff memory file
+  uint64 dirty_bytes = 10;     // dirty memory merged
+}
+
+message ForkSandboxResponse {
+  repeated Sandbox children = 1;
+  ForkTimings timings = 2;
+  string layer = 3; // the memory layer the children were restored from
 }
 
 message ExposePortResponse {

@@ -77,3 +77,21 @@ def test_ttl_expires():
         time.sleep(1)
     sb.destroy()
     pytest.fail("sandbox outlived its TTL")
+
+
+def test_fork():
+    with Sandbox.create("python", ttl=300) as sb:
+        sb.exec("echo from-parent > /root/state.txt; python -c 'open(\"/root/x\", \"w\").write(\"1\")'", check=True)
+        kids = sb.fork(3)
+        try:
+            assert len(kids) == 3 and {k.parent for k in kids} == {sb.id}
+            assert sb.last_fork.parent_paused_ms > 0 and len(sb.last_fork.restore_ms) == 3
+            for k in kids:
+                assert k.fs.read_text("/root/state.txt") == "from-parent\n"
+                assert k.exec("hostname").stdout.strip() == k.id
+            kids[0].fs.write("/root/state.txt", "changed in child 0\n")
+            assert kids[1].fs.read_text("/root/state.txt") == "from-parent\n"
+            assert sb.fs.read_text("/root/state.txt") == "from-parent\n"
+        finally:
+            for k in kids:
+                k.destroy()

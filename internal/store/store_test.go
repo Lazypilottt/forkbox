@@ -171,3 +171,33 @@ func TestPortForwards(t *testing.T) {
 		t.Errorf("forward survived its sandbox: %v", all)
 	}
 }
+
+func TestLayers(t *testing.T) {
+	s, _ := open(t)
+	ctx := context.Background()
+	s.InsertSandbox(ctx, &Sandbox{ID: "p", Template: "tpl-x", State: StateRunning, BaseLayer: "tpl-x"})
+	for i, l := range []*Layer{
+		{ID: "L1", Parent: "tpl-x", Kind: LayerFork, Dir: "/l/L1", Mem: "/l/L1/mem", DirtyBytes: 100, SourceSandbox: "p"},
+		{ID: "L2", Parent: "L1", Kind: LayerFork, Dir: "/l/L2", Mem: "/l/L2/mem", DirtyBytes: 7, SourceSandbox: "p"},
+	} {
+		if err := s.InsertLayer(ctx, l); err != nil {
+			t.Fatal(i, err)
+		}
+	}
+	if err := s.InsertLayer(ctx, &Layer{ID: "L1", Kind: LayerFork}); !errors.Is(err, ErrExists) {
+		t.Errorf("duplicate layer: %v", err)
+	}
+	lin, err := s.Lineage(ctx, "L2")
+	if err != nil || len(lin) != 2 || lin[0].ID != "L2" || lin[1].ID != "L1" || lin[1].Parent != "tpl-x" {
+		t.Fatalf("lineage %v %v", lin, err)
+	}
+	if err := s.SetBaseLayer(ctx, "p", "L2"); err != nil {
+		t.Fatal(err)
+	}
+	if sb, _ := s.GetSandbox(ctx, "p"); sb.BaseLayer != "L2" {
+		t.Errorf("base layer %q", sb.BaseLayer)
+	}
+	if _, err := s.GetLayer(ctx, "nope"); !errors.Is(err, ErrNotFound) {
+		t.Errorf("missing layer: %v", err)
+	}
+}

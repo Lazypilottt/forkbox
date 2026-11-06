@@ -54,6 +54,23 @@ class ExecEvent:
 
 
 @dataclass(frozen=True)
+class ForkTimings:
+    """Measured steps of :meth:`Sandbox.fork`, in milliseconds and bytes."""
+
+    pause_ms: float
+    snapshot_ms: float
+    disks_ms: float
+    resume_ms: float
+    parent_paused_ms: float
+    merge_ms: float
+    restore_ms: tuple[float, ...]
+    total_ms: float
+    diff_bytes: int
+    dirty_bytes: int
+    layer: str
+
+
+@dataclass(frozen=True)
 class CreateTimings:
     total_ms: float
     disk_ms: float
@@ -165,6 +182,7 @@ class Sandbox:
     ttl: int | None
     parent: str = ""
     timings: CreateTimings | None = None
+    last_fork: ForkTimings | None = None
     _client: Client = field(default_factory=default_client, repr=False, compare=False)
 
     @property
@@ -277,6 +295,23 @@ class Sandbox:
         if check and not result.ok:
             raise CommandError(f"command failed with exit code {result.exit_code}: {result.stderr.strip()[:500]}", result)
         return result
+
+    def fork(self, n: int, *, concurrency: int = 0) -> list[Sandbox]:
+        """Fork this running sandbox into ``n`` children. Each continues from
+        this sandbox's memory, processes and files at the moment of the fork;
+        this sandbox keeps running. Timings are kept in ``last_fork``."""
+        try:
+            r = self._client.stub.ForkSandbox(
+                pb.ForkSandboxRequest(id=self.id, n=n, concurrency=concurrency), metadata=self._client.metadata
+            )
+        except grpc.RpcError as e:
+            raise from_rpc(e) from None
+        t = r.timings
+        self.last_fork = ForkTimings(
+            t.pause_ms, t.snapshot_ms, t.disks_ms, t.resume_ms, t.parent_paused_ms, t.merge_ms,
+            tuple(t.restore_ms), t.total_ms, t.diff_bytes, t.dirty_bytes, r.layer,
+        )
+        return [Sandbox._from_pb(m, self._client) for m in r.children]
 
     def expose(self, port: int, host_port: int = 0) -> tuple[str, int]:
         """Forward a host TCP port to ``port`` in the guest (for previews).

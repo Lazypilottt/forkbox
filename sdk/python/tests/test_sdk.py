@@ -130,6 +130,19 @@ def test_files(daemon, tmp_path):
             sb.fs.write("relative/path", b"x")
 
 
+def test_fork(daemon):
+    with Sandbox.create() as sb:
+        kids = sb.fork(3)
+        assert [k.parent for k in kids] == [sb.id] * 3
+        assert len({k.id for k in kids}) == 3 and all(k.state == "running" for k in kids)
+        assert sb.last_fork.parent_paused_ms == 4.5 and sb.last_fork.restore_ms == (30.0, 30.0, 30.0)
+        assert sb.last_fork.layer == "layer-1" and sb.last_fork.dirty_bytes == 1 << 20
+        with pytest.raises(InvalidArgumentError):
+            sb.fork(0)
+        for k in kids:
+            k.destroy()
+
+
 def test_expose(daemon):
     with Sandbox.create() as sb:
         assert sb.expose(8000) == ("127.0.0.1", 48000)

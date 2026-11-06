@@ -2,9 +2,11 @@ package vm
 
 import (
 	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"syscall"
+	"time"
 )
 
 // process is a running jailer, which execs into Firecracker in place (no
@@ -56,3 +58,38 @@ func (p *execProcess) Kill() error {
 }
 
 func (p *execProcess) Done() <-chan struct{} { return p.done }
+
+// pidProcess is a Firecracker this process did not start (adopted after a
+// daemon restart). It cannot be waited for, so Done polls liveness.
+type pidProcess struct {
+	pid  int
+	done chan struct{}
+}
+
+func newPidProcess(pid int, alive func() bool) *pidProcess {
+	p := &pidProcess{pid: pid, done: make(chan struct{})}
+	go func() {
+		for alive() {
+			time.Sleep(20 * time.Millisecond)
+		}
+		close(p.done)
+	}()
+	return p
+}
+
+func (p *pidProcess) Pid() int { return p.pid }
+
+func (p *pidProcess) Kill() error {
+	select {
+	case <-p.done:
+		return nil
+	default:
+	}
+	err := syscall.Kill(p.pid, syscall.SIGKILL)
+	if errors.Is(err, syscall.ESRCH) {
+		return nil
+	}
+	return err
+}
+
+func (p *pidProcess) Done() <-chan struct{} { return p.done }

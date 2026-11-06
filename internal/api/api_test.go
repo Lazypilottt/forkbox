@@ -139,6 +139,23 @@ func (b *fakeBackend) Expose(ctx context.Context, id string, guest, host int) (i
 	return host, nil
 }
 
+func (b *fakeBackend) Fork(ctx context.Context, id string, n, _ int) (*sandbox.ForkResult, error) {
+	if _, err := b.Get(ctx, id); err != nil {
+		return nil, err
+	}
+	res := &sandbox.ForkResult{Layer: "layer-x", Timings: sandbox.ForkTimings{ParentPaused: 3 * time.Millisecond, DirtyBytes: 1 << 20}}
+	for i := 0; i < n; i++ {
+		c, err := b.Create(ctx, sandbox.CreateOptions{Template: "python"})
+		if err != nil {
+			return nil, err
+		}
+		c.Parent = id
+		res.Children = append(res.Children, c)
+		res.Timings.Restore = append(res.Timings.Restore, 20*time.Millisecond)
+	}
+	return res, nil
+}
+
 func (b *fakeBackend) Agent(id string) *agentclient.Client {
 	b.mu.Lock()
 	sock := b.recs[id].Vsock
@@ -204,6 +221,17 @@ func TestSandboxCRUD(t *testing.T) {
 	}
 	if _, err := c.ExposePort(ctx, &pb.ExposePortRequest{SandboxId: "sb-9", GuestPort: 80}); code(err) != codes.NotFound {
 		t.Errorf("expose on a missing sandbox: %v", err)
+	}
+	fr, err := c.ForkSandbox(ctx, &pb.ForkSandboxRequest{Id: "sb-1", N: 3})
+	if err != nil || len(fr.Children) != 3 || fr.Children[0].Parent != "sb-1" || fr.Layer != "layer-x" ||
+		fr.Timings.ParentPausedMs != 3 || len(fr.Timings.RestoreMs) != 3 || fr.Timings.DirtyBytes != 1<<20 {
+		t.Errorf("fork: %v %v", fr, err)
+	}
+	if _, err := c.ForkSandbox(ctx, &pb.ForkSandboxRequest{Id: "sb-1", N: 0}); code(err) != codes.InvalidArgument {
+		t.Errorf("fork 0: %v", err)
+	}
+	if _, err := c.ForkSandbox(ctx, &pb.ForkSandboxRequest{Id: "sb-9", N: 1}); code(err) != codes.NotFound {
+		t.Errorf("fork of a missing sandbox: %v", err)
 	}
 	if _, err := c.DestroySandbox(ctx, &pb.DestroySandboxRequest{Id: "sb-1"}); err != nil {
 		t.Fatal(err)

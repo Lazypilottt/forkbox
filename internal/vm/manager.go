@@ -396,3 +396,29 @@ func (m *Manager) CgroupPath(id string) string { return m.cg.path(id) }
 
 // DataDir is the manager's data directory.
 func (m *Manager) DataDir() string { return m.o.DataDir }
+
+// Attach returns a handle on a running VM this process did not start, such
+// as one adopted after a daemon restart, so it can be paused, snapshotted
+// and stopped. cfg gives VCPUs and MemMiB for snapshot metadata.
+func (m *Manager) Attach(ctx context.Context, id string, pid int, cfg Config) (*VM, error) {
+	if !m.Alive(pid, id) {
+		return nil, fmt.Errorf("vm %s: pid %d is not its Firecracker", id, pid)
+	}
+	cfg.ID = id
+	l := layout{m.o.DataDir, id}
+	v := &VM{m: m, cfg: cfg, id: id, l: l, api: newClient(l.host(jailAPISock)),
+		proc: newPidProcess(pid, func() bool { return m.Alive(pid, id) })}
+	var info instanceInfo
+	if err := v.api.do(ctx, m.o.APITimeout, "GET", "/", nil, &info); err != nil {
+		return nil, fmt.Errorf("vm %s: %w", id, err)
+	}
+	switch info.State {
+	case "Running":
+		v.state = Running
+	case "Paused":
+		v.state = Paused
+	default:
+		return nil, fmt.Errorf("vm %s: Firecracker reports state %q", id, info.State)
+	}
+	return v, nil
+}

@@ -40,6 +40,7 @@ const (
 	Forkbox_WriteFile_FullMethodName      = "/forkbox.v1.Forkbox/WriteFile"
 	Forkbox_DestroySandbox_FullMethodName = "/forkbox.v1.Forkbox/DestroySandbox"
 	Forkbox_ExposePort_FullMethodName     = "/forkbox.v1.Forkbox/ExposePort"
+	Forkbox_ForkSandbox_FullMethodName    = "/forkbox.v1.Forkbox/ForkSandbox"
 )
 
 // ForkboxClient is the client API for Forkbox service.
@@ -63,6 +64,9 @@ type ForkboxClient interface {
 	// Forwards a host TCP port to a guest port (for previews). host_port 0
 	// picks a free port. Forwards end when the sandbox is destroyed.
 	ExposePort(ctx context.Context, in *ExposePortRequest, opts ...grpc.CallOption) (*ExposePortResponse, error)
+	// Forks a running sandbox into n children that continue from its state.
+	// The parent is paused only for the diff snapshot and the disk copies.
+	ForkSandbox(ctx context.Context, in *ForkSandboxRequest, opts ...grpc.CallOption) (*ForkSandboxResponse, error)
 }
 
 type forkboxClient struct {
@@ -174,6 +178,16 @@ func (c *forkboxClient) ExposePort(ctx context.Context, in *ExposePortRequest, o
 	return out, nil
 }
 
+func (c *forkboxClient) ForkSandbox(ctx context.Context, in *ForkSandboxRequest, opts ...grpc.CallOption) (*ForkSandboxResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ForkSandboxResponse)
+	err := c.cc.Invoke(ctx, Forkbox_ForkSandbox_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ForkboxServer is the server API for Forkbox service.
 // All implementations must embed UnimplementedForkboxServer
 // for forward compatibility.
@@ -195,6 +209,9 @@ type ForkboxServer interface {
 	// Forwards a host TCP port to a guest port (for previews). host_port 0
 	// picks a free port. Forwards end when the sandbox is destroyed.
 	ExposePort(context.Context, *ExposePortRequest) (*ExposePortResponse, error)
+	// Forks a running sandbox into n children that continue from its state.
+	// The parent is paused only for the diff snapshot and the disk copies.
+	ForkSandbox(context.Context, *ForkSandboxRequest) (*ForkSandboxResponse, error)
 	mustEmbedUnimplementedForkboxServer()
 }
 
@@ -228,6 +245,9 @@ func (UnimplementedForkboxServer) DestroySandbox(context.Context, *DestroySandbo
 }
 func (UnimplementedForkboxServer) ExposePort(context.Context, *ExposePortRequest) (*ExposePortResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ExposePort not implemented")
+}
+func (UnimplementedForkboxServer) ForkSandbox(context.Context, *ForkSandboxRequest) (*ForkSandboxResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ForkSandbox not implemented")
 }
 func (UnimplementedForkboxServer) mustEmbedUnimplementedForkboxServer() {}
 func (UnimplementedForkboxServer) testEmbeddedByValue()                 {}
@@ -369,6 +389,24 @@ func _Forkbox_ExposePort_Handler(srv interface{}, ctx context.Context, dec func(
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Forkbox_ForkSandbox_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ForkSandboxRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ForkboxServer).ForkSandbox(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Forkbox_ForkSandbox_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ForkboxServer).ForkSandbox(ctx, req.(*ForkSandboxRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Forkbox_ServiceDesc is the grpc.ServiceDesc for Forkbox service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -395,6 +433,10 @@ var Forkbox_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ExposePort",
 			Handler:    _Forkbox_ExposePort_Handler,
+		},
+		{
+			MethodName: "ForkSandbox",
+			Handler:    _Forkbox_ForkSandbox_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

@@ -1174,6 +1174,242 @@ func (x *ExposePortRequest) GetHostPort() uint32 {
 	return 0
 }
 
+type ForkSandboxRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	N             uint32                 `protobuf:"varint,2,opt,name=n,proto3" json:"n,omitempty"`                     // 1 to 256
+	Concurrency   uint32                 `protobuf:"varint,3,opt,name=concurrency,proto3" json:"concurrency,omitempty"` // parallel restores; 0: one per host CPU
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ForkSandboxRequest) Reset() {
+	*x = ForkSandboxRequest{}
+	mi := &file_forkbox_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ForkSandboxRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ForkSandboxRequest) ProtoMessage() {}
+
+func (x *ForkSandboxRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_forkbox_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ForkSandboxRequest.ProtoReflect.Descriptor instead.
+func (*ForkSandboxRequest) Descriptor() ([]byte, []int) {
+	return file_forkbox_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *ForkSandboxRequest) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *ForkSandboxRequest) GetN() uint32 {
+	if x != nil {
+		return x.N
+	}
+	return 0
+}
+
+func (x *ForkSandboxRequest) GetConcurrency() uint32 {
+	if x != nil {
+		return x.Concurrency
+	}
+	return 0
+}
+
+type ForkTimings struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	PauseMs        float64                `protobuf:"fixed64,1,opt,name=pause_ms,json=pauseMs,proto3" json:"pause_ms,omitempty"`
+	SnapshotMs     float64                `protobuf:"fixed64,2,opt,name=snapshot_ms,json=snapshotMs,proto3" json:"snapshot_ms,omitempty"` // diff snapshot
+	DisksMs        float64                `protobuf:"fixed64,3,opt,name=disks_ms,json=disksMs,proto3" json:"disks_ms,omitempty"`          // reflinks of the parent's disk
+	ResumeMs       float64                `protobuf:"fixed64,4,opt,name=resume_ms,json=resumeMs,proto3" json:"resume_ms,omitempty"`
+	ParentPausedMs float64                `protobuf:"fixed64,5,opt,name=parent_paused_ms,json=parentPausedMs,proto3" json:"parent_paused_ms,omitempty"` // pause through resume
+	MergeMs        float64                `protobuf:"fixed64,6,opt,name=merge_ms,json=mergeMs,proto3" json:"merge_ms,omitempty"`                        // diff onto the parent's base layer
+	RestoreMs      []float64              `protobuf:"fixed64,7,rep,packed,name=restore_ms,json=restoreMs,proto3" json:"restore_ms,omitempty"`           // per child, until its agent is ready
+	TotalMs        float64                `protobuf:"fixed64,8,opt,name=total_ms,json=totalMs,proto3" json:"total_ms,omitempty"`
+	DiffBytes      uint64                 `protobuf:"varint,9,opt,name=diff_bytes,json=diffBytes,proto3" json:"diff_bytes,omitempty"`     // allocated size of the diff memory file
+	DirtyBytes     uint64                 `protobuf:"varint,10,opt,name=dirty_bytes,json=dirtyBytes,proto3" json:"dirty_bytes,omitempty"` // dirty memory merged
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *ForkTimings) Reset() {
+	*x = ForkTimings{}
+	mi := &file_forkbox_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ForkTimings) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ForkTimings) ProtoMessage() {}
+
+func (x *ForkTimings) ProtoReflect() protoreflect.Message {
+	mi := &file_forkbox_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ForkTimings.ProtoReflect.Descriptor instead.
+func (*ForkTimings) Descriptor() ([]byte, []int) {
+	return file_forkbox_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *ForkTimings) GetPauseMs() float64 {
+	if x != nil {
+		return x.PauseMs
+	}
+	return 0
+}
+
+func (x *ForkTimings) GetSnapshotMs() float64 {
+	if x != nil {
+		return x.SnapshotMs
+	}
+	return 0
+}
+
+func (x *ForkTimings) GetDisksMs() float64 {
+	if x != nil {
+		return x.DisksMs
+	}
+	return 0
+}
+
+func (x *ForkTimings) GetResumeMs() float64 {
+	if x != nil {
+		return x.ResumeMs
+	}
+	return 0
+}
+
+func (x *ForkTimings) GetParentPausedMs() float64 {
+	if x != nil {
+		return x.ParentPausedMs
+	}
+	return 0
+}
+
+func (x *ForkTimings) GetMergeMs() float64 {
+	if x != nil {
+		return x.MergeMs
+	}
+	return 0
+}
+
+func (x *ForkTimings) GetRestoreMs() []float64 {
+	if x != nil {
+		return x.RestoreMs
+	}
+	return nil
+}
+
+func (x *ForkTimings) GetTotalMs() float64 {
+	if x != nil {
+		return x.TotalMs
+	}
+	return 0
+}
+
+func (x *ForkTimings) GetDiffBytes() uint64 {
+	if x != nil {
+		return x.DiffBytes
+	}
+	return 0
+}
+
+func (x *ForkTimings) GetDirtyBytes() uint64 {
+	if x != nil {
+		return x.DirtyBytes
+	}
+	return 0
+}
+
+type ForkSandboxResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Children      []*Sandbox             `protobuf:"bytes,1,rep,name=children,proto3" json:"children,omitempty"`
+	Timings       *ForkTimings           `protobuf:"bytes,2,opt,name=timings,proto3" json:"timings,omitempty"`
+	Layer         string                 `protobuf:"bytes,3,opt,name=layer,proto3" json:"layer,omitempty"` // the memory layer the children were restored from
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ForkSandboxResponse) Reset() {
+	*x = ForkSandboxResponse{}
+	mi := &file_forkbox_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ForkSandboxResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ForkSandboxResponse) ProtoMessage() {}
+
+func (x *ForkSandboxResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_forkbox_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ForkSandboxResponse.ProtoReflect.Descriptor instead.
+func (*ForkSandboxResponse) Descriptor() ([]byte, []int) {
+	return file_forkbox_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *ForkSandboxResponse) GetChildren() []*Sandbox {
+	if x != nil {
+		return x.Children
+	}
+	return nil
+}
+
+func (x *ForkSandboxResponse) GetTimings() *ForkTimings {
+	if x != nil {
+		return x.Timings
+	}
+	return nil
+}
+
+func (x *ForkSandboxResponse) GetLayer() string {
+	if x != nil {
+		return x.Layer
+	}
+	return ""
+}
+
 type ExposePortResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Host          string                 `protobuf:"bytes,1,opt,name=host,proto3" json:"host,omitempty"` // address the forward listens on
@@ -1184,7 +1420,7 @@ type ExposePortResponse struct {
 
 func (x *ExposePortResponse) Reset() {
 	*x = ExposePortResponse{}
-	mi := &file_forkbox_proto_msgTypes[18]
+	mi := &file_forkbox_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1196,7 +1432,7 @@ func (x *ExposePortResponse) String() string {
 func (*ExposePortResponse) ProtoMessage() {}
 
 func (x *ExposePortResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_forkbox_proto_msgTypes[18]
+	mi := &file_forkbox_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1209,7 +1445,7 @@ func (x *ExposePortResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExposePortResponse.ProtoReflect.Descriptor instead.
 func (*ExposePortResponse) Descriptor() ([]byte, []int) {
-	return file_forkbox_proto_rawDescGZIP(), []int{18}
+	return file_forkbox_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *ExposePortResponse) GetHost() string {
@@ -1313,10 +1549,34 @@ const file_forkbox_proto_rawDesc = "" +
 	"sandbox_id\x18\x01 \x01(\tR\tsandboxId\x12\x1d\n" +
 	"\n" +
 	"guest_port\x18\x02 \x01(\rR\tguestPort\x12\x1b\n" +
-	"\thost_port\x18\x03 \x01(\rR\bhostPort\"E\n" +
+	"\thost_port\x18\x03 \x01(\rR\bhostPort\"T\n" +
+	"\x12ForkSandboxRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\f\n" +
+	"\x01n\x18\x02 \x01(\rR\x01n\x12 \n" +
+	"\vconcurrency\x18\x03 \x01(\rR\vconcurrency\"\xc0\x02\n" +
+	"\vForkTimings\x12\x19\n" +
+	"\bpause_ms\x18\x01 \x01(\x01R\apauseMs\x12\x1f\n" +
+	"\vsnapshot_ms\x18\x02 \x01(\x01R\n" +
+	"snapshotMs\x12\x19\n" +
+	"\bdisks_ms\x18\x03 \x01(\x01R\adisksMs\x12\x1b\n" +
+	"\tresume_ms\x18\x04 \x01(\x01R\bresumeMs\x12(\n" +
+	"\x10parent_paused_ms\x18\x05 \x01(\x01R\x0eparentPausedMs\x12\x19\n" +
+	"\bmerge_ms\x18\x06 \x01(\x01R\amergeMs\x12\x1d\n" +
+	"\n" +
+	"restore_ms\x18\a \x03(\x01R\trestoreMs\x12\x19\n" +
+	"\btotal_ms\x18\b \x01(\x01R\atotalMs\x12\x1d\n" +
+	"\n" +
+	"diff_bytes\x18\t \x01(\x04R\tdiffBytes\x12\x1f\n" +
+	"\vdirty_bytes\x18\n" +
+	" \x01(\x04R\n" +
+	"dirtyBytes\"\x8f\x01\n" +
+	"\x13ForkSandboxResponse\x12/\n" +
+	"\bchildren\x18\x01 \x03(\v2\x13.forkbox.v1.SandboxR\bchildren\x121\n" +
+	"\atimings\x18\x02 \x01(\v2\x17.forkbox.v1.ForkTimingsR\atimings\x12\x14\n" +
+	"\x05layer\x18\x03 \x01(\tR\x05layer\"E\n" +
 	"\x12ExposePortResponse\x12\x12\n" +
 	"\x04host\x18\x01 \x01(\tR\x04host\x12\x1b\n" +
-	"\thost_port\x18\x02 \x01(\rR\bhostPort2\xd7\x04\n" +
+	"\thost_port\x18\x02 \x01(\rR\bhostPort2\xa7\x05\n" +
 	"\aForkbox\x12F\n" +
 	"\rCreateSandbox\x12 .forkbox.v1.CreateSandboxRequest\x1a\x13.forkbox.v1.Sandbox\x12@\n" +
 	"\n" +
@@ -1327,7 +1587,8 @@ const file_forkbox_proto_rawDesc = "" +
 	"\tWriteFile\x12\x1c.forkbox.v1.WriteFileRequest\x1a\x1d.forkbox.v1.WriteFileResponse(\x01\x12W\n" +
 	"\x0eDestroySandbox\x12!.forkbox.v1.DestroySandboxRequest\x1a\".forkbox.v1.DestroySandboxResponse\x12K\n" +
 	"\n" +
-	"ExposePort\x12\x1d.forkbox.v1.ExposePortRequest\x1a\x1e.forkbox.v1.ExposePortResponseB0Z.github.com/Lazypilottt/forkbox/proto/forkboxpbb\x06proto3"
+	"ExposePort\x12\x1d.forkbox.v1.ExposePortRequest\x1a\x1e.forkbox.v1.ExposePortResponse\x12N\n" +
+	"\vForkSandbox\x12\x1e.forkbox.v1.ForkSandboxRequest\x1a\x1f.forkbox.v1.ForkSandboxResponseB0Z.github.com/Lazypilottt/forkbox/proto/forkboxpbb\x06proto3"
 
 var (
 	file_forkbox_proto_rawDescOnce sync.Once
@@ -1341,7 +1602,7 @@ func file_forkbox_proto_rawDescGZIP() []byte {
 	return file_forkbox_proto_rawDescData
 }
 
-var file_forkbox_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
+var file_forkbox_proto_msgTypes = make([]protoimpl.MessageInfo, 22)
 var file_forkbox_proto_goTypes = []any{
 	(*Sandbox)(nil),                // 0: forkbox.v1.Sandbox
 	(*CreateTimings)(nil),          // 1: forkbox.v1.CreateTimings
@@ -1361,7 +1622,10 @@ var file_forkbox_proto_goTypes = []any{
 	(*DestroySandboxRequest)(nil),  // 15: forkbox.v1.DestroySandboxRequest
 	(*DestroySandboxResponse)(nil), // 16: forkbox.v1.DestroySandboxResponse
 	(*ExposePortRequest)(nil),      // 17: forkbox.v1.ExposePortRequest
-	(*ExposePortResponse)(nil),     // 18: forkbox.v1.ExposePortResponse
+	(*ForkSandboxRequest)(nil),     // 18: forkbox.v1.ForkSandboxRequest
+	(*ForkTimings)(nil),            // 19: forkbox.v1.ForkTimings
+	(*ForkSandboxResponse)(nil),    // 20: forkbox.v1.ForkSandboxResponse
+	(*ExposePortResponse)(nil),     // 21: forkbox.v1.ExposePortResponse
 }
 var file_forkbox_proto_depIdxs = []int32{
 	1,  // 0: forkbox.v1.Sandbox.timings:type_name -> forkbox.v1.CreateTimings
@@ -1369,27 +1633,31 @@ var file_forkbox_proto_depIdxs = []int32{
 	8,  // 2: forkbox.v1.ExecEvent.started:type_name -> forkbox.v1.ExecStarted
 	9,  // 3: forkbox.v1.ExecEvent.exit:type_name -> forkbox.v1.ExecExit
 	12, // 4: forkbox.v1.WriteFileRequest.header:type_name -> forkbox.v1.WriteFileHeader
-	2,  // 5: forkbox.v1.Forkbox.CreateSandbox:input_type -> forkbox.v1.CreateSandboxRequest
-	3,  // 6: forkbox.v1.Forkbox.GetSandbox:input_type -> forkbox.v1.GetSandboxRequest
-	4,  // 7: forkbox.v1.Forkbox.ListSandboxes:input_type -> forkbox.v1.ListSandboxesRequest
-	6,  // 8: forkbox.v1.Forkbox.Exec:input_type -> forkbox.v1.ExecRequest
-	10, // 9: forkbox.v1.Forkbox.ReadFile:input_type -> forkbox.v1.ReadFileRequest
-	13, // 10: forkbox.v1.Forkbox.WriteFile:input_type -> forkbox.v1.WriteFileRequest
-	15, // 11: forkbox.v1.Forkbox.DestroySandbox:input_type -> forkbox.v1.DestroySandboxRequest
-	17, // 12: forkbox.v1.Forkbox.ExposePort:input_type -> forkbox.v1.ExposePortRequest
-	0,  // 13: forkbox.v1.Forkbox.CreateSandbox:output_type -> forkbox.v1.Sandbox
-	0,  // 14: forkbox.v1.Forkbox.GetSandbox:output_type -> forkbox.v1.Sandbox
-	5,  // 15: forkbox.v1.Forkbox.ListSandboxes:output_type -> forkbox.v1.ListSandboxesResponse
-	7,  // 16: forkbox.v1.Forkbox.Exec:output_type -> forkbox.v1.ExecEvent
-	11, // 17: forkbox.v1.Forkbox.ReadFile:output_type -> forkbox.v1.FileChunk
-	14, // 18: forkbox.v1.Forkbox.WriteFile:output_type -> forkbox.v1.WriteFileResponse
-	16, // 19: forkbox.v1.Forkbox.DestroySandbox:output_type -> forkbox.v1.DestroySandboxResponse
-	18, // 20: forkbox.v1.Forkbox.ExposePort:output_type -> forkbox.v1.ExposePortResponse
-	13, // [13:21] is the sub-list for method output_type
-	5,  // [5:13] is the sub-list for method input_type
-	5,  // [5:5] is the sub-list for extension type_name
-	5,  // [5:5] is the sub-list for extension extendee
-	0,  // [0:5] is the sub-list for field type_name
+	0,  // 5: forkbox.v1.ForkSandboxResponse.children:type_name -> forkbox.v1.Sandbox
+	19, // 6: forkbox.v1.ForkSandboxResponse.timings:type_name -> forkbox.v1.ForkTimings
+	2,  // 7: forkbox.v1.Forkbox.CreateSandbox:input_type -> forkbox.v1.CreateSandboxRequest
+	3,  // 8: forkbox.v1.Forkbox.GetSandbox:input_type -> forkbox.v1.GetSandboxRequest
+	4,  // 9: forkbox.v1.Forkbox.ListSandboxes:input_type -> forkbox.v1.ListSandboxesRequest
+	6,  // 10: forkbox.v1.Forkbox.Exec:input_type -> forkbox.v1.ExecRequest
+	10, // 11: forkbox.v1.Forkbox.ReadFile:input_type -> forkbox.v1.ReadFileRequest
+	13, // 12: forkbox.v1.Forkbox.WriteFile:input_type -> forkbox.v1.WriteFileRequest
+	15, // 13: forkbox.v1.Forkbox.DestroySandbox:input_type -> forkbox.v1.DestroySandboxRequest
+	17, // 14: forkbox.v1.Forkbox.ExposePort:input_type -> forkbox.v1.ExposePortRequest
+	18, // 15: forkbox.v1.Forkbox.ForkSandbox:input_type -> forkbox.v1.ForkSandboxRequest
+	0,  // 16: forkbox.v1.Forkbox.CreateSandbox:output_type -> forkbox.v1.Sandbox
+	0,  // 17: forkbox.v1.Forkbox.GetSandbox:output_type -> forkbox.v1.Sandbox
+	5,  // 18: forkbox.v1.Forkbox.ListSandboxes:output_type -> forkbox.v1.ListSandboxesResponse
+	7,  // 19: forkbox.v1.Forkbox.Exec:output_type -> forkbox.v1.ExecEvent
+	11, // 20: forkbox.v1.Forkbox.ReadFile:output_type -> forkbox.v1.FileChunk
+	14, // 21: forkbox.v1.Forkbox.WriteFile:output_type -> forkbox.v1.WriteFileResponse
+	16, // 22: forkbox.v1.Forkbox.DestroySandbox:output_type -> forkbox.v1.DestroySandboxResponse
+	21, // 23: forkbox.v1.Forkbox.ExposePort:output_type -> forkbox.v1.ExposePortResponse
+	20, // 24: forkbox.v1.Forkbox.ForkSandbox:output_type -> forkbox.v1.ForkSandboxResponse
+	16, // [16:25] is the sub-list for method output_type
+	7,  // [7:16] is the sub-list for method input_type
+	7,  // [7:7] is the sub-list for extension type_name
+	7,  // [7:7] is the sub-list for extension extendee
+	0,  // [0:7] is the sub-list for field type_name
 }
 
 func init() { file_forkbox_proto_init() }
@@ -1413,7 +1681,7 @@ func file_forkbox_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_forkbox_proto_rawDesc), len(file_forkbox_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   19,
+			NumMessages:   22,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

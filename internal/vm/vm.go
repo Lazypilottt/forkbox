@@ -426,3 +426,13 @@ func tailFile(path string, n int64) string {
 	}
 	return string(b)
 }
+
+// WriteSnapshotMeta writes s as dir's snapshot.json, so Restore accepts the
+// directory (for example a merged fork layer, which is a full snapshot).
+func WriteSnapshotMeta(dir string, s *Snapshot) error {
+	b, err := json.MarshalIndent(s, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(dir, SnapshotMetaFile), append(b, '\n'), 0o644)
+}

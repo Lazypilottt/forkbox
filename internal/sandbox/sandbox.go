@@ -47,6 +47,7 @@ type Manager struct {
 	mu        sync.Mutex
 	vms       map[string]*vm.VM         // VMs started by this process
 	listeners map[string][]net.Listener // port forwards, by sandbox
+	forkLocks map[string]*sync.Mutex    // one fork at a time per parent
 }
 
 // New returns a manager.
@@ -119,7 +120,7 @@ func (m *Manager) Create(ctx context.Context, o CreateOptions) (*Created, error)
 	}
 	dir := Dir(m.DataDir, id)
 	rec := &store.Sandbox{
-		ID: id, Template: tpl.ID, TemplateName: tpl.Name, State: store.StateCreating, Dir: dir,
+		ID: id, Template: tpl.ID, TemplateName: tpl.Name, State: store.StateCreating, Dir: dir, BaseLayer: tpl.ID,
 		Jail: vm.JailDir(m.DataDir, id), Cgroup: m.VMs.CgroupPath(id),
 		Vsock: vm.VsockSocketPath(m.DataDir, id), TTL: o.TTL,
 	}
@@ -154,24 +155,35 @@ func (m *Manager) create(ctx context.Context, tpl *template.Template, rec *store
 		return nil, err
 	}
 	c.Timings.Disk = time.Since(t)
-
-	// The namespace's tap has the name, address and MAC the snapshot expects.
-	t = time.Now()
-	slot, err := m.Store.AllocSlot(ctx, rec.ID, m.Net.Slots())
-	if err != nil {
+	mem := filepath.Join(tpl.SnapshotDir(), vm.SnapshotMemFile)
+	if err := m.restoreInto(ctx, c, tpl.SnapshotDir(), mem, disk); err != nil {
 		return nil, err
 	}
+	c.Identity.TemplateID, c.Identity.TemplateMem = tpl.ID, mem
+	return c, nil
+}
+
+// restoreInto brings up rec's VM from a snapshot (vmstate in snapDir, the
+// memory file mem, the root disk disk): network, restore, resume, agent,
+// identity. Used by Create and by Fork.
+func (m *Manager) restoreInto(ctx context.Context, c *Created, snapDir, mem, disk string) error {
+	rec := c.Sandbox
+	// The namespace's tap has the name, address and MAC the snapshot expects.
+	t := time.Now()
+	slot, err := m.Store.AllocSlot(ctx, rec.ID, m.Net.Slots())
+	if err != nil {
+		return err
+	}
 	if err := m.Net.Setup(ctx, rec.ID, slot); err != nil {
-		return nil, err
+		return err
 	}
 	c.Timings.Network = time.Since(t)
 
 	t = time.Now()
-	mem := filepath.Join(tpl.SnapshotDir(), vm.SnapshotMemFile)
-	v, err := m.VMs.Restore(ctx, tpl.SnapshotDir(), vm.MemBackend{Kind: vm.MemFile, Path: mem},
+	v, err := m.VMs.Restore(ctx, snapDir, vm.MemBackend{Kind: vm.MemFile, Path: mem},
 		vm.Config{ID: rec.ID, Rootfs: vm.Drive{Path: disk}, NetNS: netns.Path(rec.ID)})
 	if err != nil {
-		return nil, err
+		return err
 	}
 	m.mu.Lock()
 	m.vms[rec.ID] = v
@@ -180,7 +192,7 @@ func (m *Manager) create(ctx context.Context, tpl *template.Template, rec *store
 
 	t = time.Now()
 	if err := v.Resume(ctx); err != nil {
-		return nil, err
+		return err
 	}
 	c.Timings.Resume = time.Since(t)
 
@@ -194,31 +206,28 @@ func (m *Manager) create(ctx context.Context, tpl *template.Template, rec *store
 	pong, err := ac.WaitReady(actx)
 	cancel()
 	if err != nil {
-		return nil, fmt.Errorf("agent did not answer within %s: %w", at, err)
+		return fmt.Errorf("agent did not answer within %s: %w", at, err)
 	}
 	c.Timings.Agent = time.Since(t)
 
 	t = time.Now()
 	entropy := make([]byte, 64)
 	if _, err := rand.Read(entropy); err != nil {
-		return nil, err
+		return err
 	}
 	r, err := ac.Restored(ctx, rec.ID, rec.ID, entropy)
 	if err != nil {
-		return nil, fmt.Errorf("agent restored: %w", err)
+		return fmt.Errorf("agent restored: %w", err)
 	}
 	c.Timings.Identity = time.Since(t)
 	c.Identity = &Identity{
 		MachineID: r.MachineId, ClockStep: time.Duration(r.ClockStepNs), Generation: r.Generation,
-		Actions: r.Actions, AgentVer: pong.AgentVersion, VMTimings: v.Timings(), TemplateID: tpl.ID, TemplateMem: mem,
+		Actions: r.Actions, AgentVer: pong.AgentVersion, VMTimings: v.Timings(),
 	}
 	m.Log.Printf("sandbox %s identity: %v", rec.ID, r.Actions)
 	rec.Pid = v.Pid()
 	rec.State = store.StateRunning
-	if err := m.Store.SetState(ctx, rec.ID, store.StateRunning, rec.Pid, ""); err != nil {
-		return nil, err
-	}
-	return c, nil
+	return m.Store.SetState(ctx, rec.ID, store.StateRunning, rec.Pid, "")
 }
 
 // Agent is a client for a sandbox's guest agent.

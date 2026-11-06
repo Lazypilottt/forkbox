@@ -182,6 +182,50 @@ class ExposePortRequest(_message.Message):
     host_port: int
     def __init__(self, sandbox_id: _Optional[str] = ..., guest_port: _Optional[int] = ..., host_port: _Optional[int] = ...) -> None: ...
 
+class ForkSandboxRequest(_message.Message):
+    __slots__ = ("id", "n", "concurrency")
+    ID_FIELD_NUMBER: _ClassVar[int]
+    N_FIELD_NUMBER: _ClassVar[int]
+    CONCURRENCY_FIELD_NUMBER: _ClassVar[int]
+    id: str
+    n: int
+    concurrency: int
+    def __init__(self, id: _Optional[str] = ..., n: _Optional[int] = ..., concurrency: _Optional[int] = ...) -> None: ...
+
+class ForkTimings(_message.Message):
+    __slots__ = ("pause_ms", "snapshot_ms", "disks_ms", "resume_ms", "parent_paused_ms", "merge_ms", "restore_ms", "total_ms", "diff_bytes", "dirty_bytes")
+    PAUSE_MS_FIELD_NUMBER: _ClassVar[int]
+    SNAPSHOT_MS_FIELD_NUMBER: _ClassVar[int]
+    DISKS_MS_FIELD_NUMBER: _ClassVar[int]
+    RESUME_MS_FIELD_NUMBER: _ClassVar[int]
+    PARENT_PAUSED_MS_FIELD_NUMBER: _ClassVar[int]
+    MERGE_MS_FIELD_NUMBER: _ClassVar[int]
+    RESTORE_MS_FIELD_NUMBER: _ClassVar[int]
+    TOTAL_MS_FIELD_NUMBER: _ClassVar[int]
+    DIFF_BYTES_FIELD_NUMBER: _ClassVar[int]
+    DIRTY_BYTES_FIELD_NUMBER: _ClassVar[int]
+    pause_ms: float
+    snapshot_ms: float
+    disks_ms: float
+    resume_ms: float
+    parent_paused_ms: float
+    merge_ms: float
+    restore_ms: _containers.RepeatedScalarFieldContainer[float]
+    total_ms: float
+    diff_bytes: int
+    dirty_bytes: int
+    def __init__(self, pause_ms: _Optional[float] = ..., snapshot_ms: _Optional[float] = ..., disks_ms: _Optional[float] = ..., resume_ms: _Optional[float] = ..., parent_paused_ms: _Optional[float] = ..., merge_ms: _Optional[float] = ..., restore_ms: _Optional[_Iterable[float]] = ..., total_ms: _Optional[float] = ..., diff_bytes: _Optional[int] = ..., dirty_bytes: _Optional[int] = ...) -> None: ...
+
+class ForkSandboxResponse(_message.Message):
+    __slots__ = ("children", "timings", "layer")
+    CHILDREN_FIELD_NUMBER: _ClassVar[int]
+    TIMINGS_FIELD_NUMBER: _ClassVar[int]
+    LAYER_FIELD_NUMBER: _ClassVar[int]
+    children: _containers.RepeatedCompositeFieldContainer[Sandbox]
+    timings: ForkTimings
+    layer: str
+    def __init__(self, children: _Optional[_Iterable[_Union[Sandbox, _Mapping]]] = ..., timings: _Optional[_Union[ForkTimings, _Mapping]] = ..., layer: _Optional[str] = ...) -> None: ...
+
 class ExposePortResponse(_message.Message):
     __slots__ = ("host", "host_port")
     HOST_FIELD_NUMBER: _ClassVar[int]

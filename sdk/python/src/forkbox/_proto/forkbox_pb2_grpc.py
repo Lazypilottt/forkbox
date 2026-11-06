@@ -74,6 +74,11 @@ class ForkboxStub:
                 request_serializer=forkbox__pb2.ExposePortRequest.SerializeToString,
                 response_deserializer=forkbox__pb2.ExposePortResponse.FromString,
                 _registered_method=True)
+        self.ForkSandbox = channel.unary_unary(
+                '/forkbox.v1.Forkbox/ForkSandbox',
+                request_serializer=forkbox__pb2.ForkSandboxRequest.SerializeToString,
+                response_deserializer=forkbox__pb2.ForkSandboxResponse.FromString,
+                _registered_method=True)
 
 
 class ForkboxServicer:
@@ -136,6 +141,14 @@ class ForkboxServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def ForkSandbox(self, request, context):
+        """Forks a running sandbox into n children that continue from its state.
+        The parent is paused only for the diff snapshot and the disk copies.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_ForkboxServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -178,6 +191,11 @@ def add_ForkboxServicer_to_server(servicer, server):
                     servicer.ExposePort,
                     request_deserializer=forkbox__pb2.ExposePortRequest.FromString,
                     response_serializer=forkbox__pb2.ExposePortResponse.SerializeToString,
+            ),
+            'ForkSandbox': grpc.unary_unary_rpc_method_handler(
+                    servicer.ForkSandbox,
+                    request_deserializer=forkbox__pb2.ForkSandboxRequest.FromString,
+                    response_serializer=forkbox__pb2.ForkSandboxResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -396,6 +414,33 @@ class Forkbox:
             '/forkbox.v1.Forkbox/ExposePort',
             forkbox__pb2.ExposePortRequest.SerializeToString,
             forkbox__pb2.ExposePortResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ForkSandbox(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/forkbox.v1.Forkbox/ForkSandbox',
+            forkbox__pb2.ForkSandboxRequest.SerializeToString,
+            forkbox__pb2.ForkSandboxResponse.FromString,
             options,
             channel_credentials,
             insecure,

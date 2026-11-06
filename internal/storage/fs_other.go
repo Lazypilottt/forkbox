@@ -13,3 +13,16 @@ func FSType(path string) (string, error) {
 func Reflink(src, dst string) error {
 	return fmt.Errorf("reflink %s -> %s: %w", src, dst, ErrUnsupportedOS)
 }
+
+// MergeStats says how much of a diff was applied.
+type MergeStats struct {
+	Extents      int
+	Bytes        int64
+	ClonedBytes  int64
+	CopiedBytes  int64
+	BaseSize     int64
+	DiffAllocate int64
+}
+
+// MergeDiff needs Linux.
+func MergeDiff(base, diff, out string) (*MergeStats, error) { return nil, ErrUnsupportedOS }

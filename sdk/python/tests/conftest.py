@@ -119,6 +119,23 @@ class FakeForkbox(pbg.ForkboxServicer):
         yield pb.ExecEvent(exit=pb.ExecExit(exit_code=rc, signal=sig, timed_out=timed_out,
                                             duration_ms=(time.monotonic() - start) * 1000))
 
+    def ForkSandbox(self, request, context):
+        parent = self._get(request.id, context)
+        if not 0 < request.n <= 256:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, "n must be 1 to 256")
+        out = pb.ForkSandboxResponse(layer="layer-1")
+        out.timings.CopyFrom(pb.ForkTimings(parent_paused_ms=4.5, merge_ms=12, total_ms=90, dirty_bytes=1 << 20))
+        for _ in range(request.n):
+            with self.lock:
+                self.n += 1
+                sid = f"sb-{self.n}"
+            child = pb.Sandbox(id=sid, template=parent.template, template_id=parent.template_id, parent=parent.id,
+                               state="running", pid=4000 + self.n, created_at_unix_ms=int(time.time() * 1000))
+            self.sandboxes[sid] = child
+            out.children.append(child)
+            out.timings.restore_ms.append(30.0)
+        return out
+
     def ExposePort(self, request, context):
         self._get(request.sandbox_id, context)
         if not 0 < request.guest_port < 65536:

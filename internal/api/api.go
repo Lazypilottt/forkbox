@@ -33,6 +33,7 @@ type Backend interface {
 	Destroy(ctx context.Context, id string) error
 	Agent(id string) *agentclient.Client
 	Expose(ctx context.Context, id string, guestPort, hostPort int) (int, error)
+	Fork(ctx context.Context, id string, n, concurrency int) (*sandbox.ForkResult, error)
 }
 
 // Server implements the Forkbox gRPC service.
@@ -101,6 +102,30 @@ func (s *Server) ExposePort(ctx context.Context, r *pb.ExposePortRequest) (*pb.E
 		return nil, toStatus(err)
 	}
 	return &pb.ExposePortResponse{Host: s.ExposeHost, HostPort: uint32(port)}, nil
+}
+
+func (s *Server) ForkSandbox(ctx context.Context, r *pb.ForkSandboxRequest) (*pb.ForkSandboxResponse, error) {
+	if r.N < 1 || r.N > sandbox.MaxFork {
+		return nil, status.Errorf(codes.InvalidArgument, "n must be 1 to %d", sandbox.MaxFork)
+	}
+	res, err := s.B.Fork(ctx, r.Id, int(r.N), int(r.Concurrency))
+	if err != nil {
+		return nil, toStatus(err)
+	}
+	ms := func(d time.Duration) float64 { return float64(d.Microseconds()) / 1000 }
+	tm := res.Timings
+	out := &pb.ForkSandboxResponse{Layer: res.Layer, Timings: &pb.ForkTimings{
+		PauseMs: ms(tm.Pause), SnapshotMs: ms(tm.Snapshot), DisksMs: ms(tm.Disks), ResumeMs: ms(tm.Resume),
+		ParentPausedMs: ms(tm.ParentPaused), MergeMs: ms(tm.Merge), TotalMs: ms(tm.Total),
+		DiffBytes: uint64(tm.DiffBytes), DirtyBytes: uint64(tm.DirtyBytes),
+	}}
+	for _, d := range tm.Restore {
+		out.Timings.RestoreMs = append(out.Timings.RestoreMs, ms(d))
+	}
+	for _, c := range res.Children {
+		out.Children = append(out.Children, toPB(c.Sandbox))
+	}
+	return out, nil
 }
 
 // running returns the agent of a running sandbox.

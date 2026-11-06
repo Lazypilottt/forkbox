@@ -49,6 +49,17 @@ var migrations = []string{
 		host_port  INTEGER NOT NULL UNIQUE,
 		PRIMARY KEY (sandbox_id, guest_port)
 	);`,
+	`CREATE TABLE layers (
+		id             TEXT PRIMARY KEY,
+		parent         TEXT NOT NULL DEFAULT '',
+		kind           TEXT NOT NULL,
+		dir            TEXT NOT NULL,
+		mem            TEXT NOT NULL,
+		dirty_bytes    INTEGER NOT NULL DEFAULT 0,
+		source_sandbox TEXT NOT NULL DEFAULT '',
+		created_at     INTEGER NOT NULL
+	);
+	ALTER TABLE sandboxes ADD COLUMN base_layer TEXT NOT NULL DEFAULT '';`,
 }
 
 // Open opens (creating if needed) the database at path and migrates it.
@@ -122,6 +133,9 @@ type Sandbox struct {
 	UpdatedAt    time.Time
 	TTL          time.Duration // 0: no expiry
 	Error        string        // why it failed, for StateFailed
+	// BaseLayer is the memory layer the VM's next diff is relative to: the
+	// template id for a sandbox restored from a template, else a layer id.
+	BaseLayer string
 }
 
 // Expired reports whether the sandbox's TTL has run out at now.
@@ -143,10 +157,10 @@ func (s *Store) InsertSandbox(ctx context.Context, sb *Sandbox) error {
 	}
 	sb.UpdatedAt = now
 	_, err := s.db.ExecContext(ctx, `INSERT INTO sandboxes
-		(id, template, template_name, parent, state, dir, jail, cgroup, vsock, pid, created_at, updated_at, ttl_s, error)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		(id, template, template_name, parent, state, dir, jail, cgroup, vsock, pid, created_at, updated_at, ttl_s, error, base_layer)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		sb.ID, sb.Template, sb.TemplateName, sb.Parent, sb.State, sb.Dir, sb.Jail, sb.Cgroup, sb.Vsock, sb.Pid,
-		sb.CreatedAt.UnixNano(), sb.UpdatedAt.UnixNano(), int64(sb.TTL/time.Second), sb.Error)
+		sb.CreatedAt.UnixNano(), sb.UpdatedAt.UnixNano(), int64(sb.TTL/time.Second), sb.Error, sb.BaseLayer)
 	if err != nil && isConstraint(err) {
 		return fmt.Errorf("%w: %s", ErrExists, sb.ID)
 	}
@@ -197,7 +211,7 @@ func (s *Store) ListSandboxes(ctx context.Context) ([]*Sandbox, error) {
 	return scanSandboxes(rows)
 }
 
-const selectSandbox = `SELECT id, template, template_name, parent, state, dir, jail, cgroup, vsock, pid, created_at, updated_at, ttl_s, error FROM sandboxes`
+const selectSandbox = `SELECT id, template, template_name, parent, state, dir, jail, cgroup, vsock, pid, created_at, updated_at, ttl_s, error, base_layer FROM sandboxes`
 
 func scanSandboxes(rows *sql.Rows) ([]*Sandbox, error) {
 	defer rows.Close()
@@ -206,7 +220,7 @@ func scanSandboxes(rows *sql.Rows) ([]*Sandbox, error) {
 		var sb Sandbox
 		var created, updated, ttl int64
 		if err := rows.Scan(&sb.ID, &sb.Template, &sb.TemplateName, &sb.Parent, &sb.State, &sb.Dir, &sb.Jail, &sb.Cgroup,
-			&sb.Vsock, &sb.Pid, &created, &updated, &ttl, &sb.Error); err != nil {
+			&sb.Vsock, &sb.Pid, &created, &updated, &ttl, &sb.Error, &sb.BaseLayer); err != nil {
 			return nil, err
 		}
 		sb.CreatedAt, sb.UpdatedAt = time.Unix(0, created), time.Unix(0, updated)
@@ -318,4 +332,77 @@ func (s *Store) PortForwards(ctx context.Context, sandboxID string) ([]PortForwa
 		out = append(out, pf)
 	}
 	return out, rows.Err()
+}
+
+// Layer kinds.
+const (
+	LayerFork = "fork" // a parent's memory at a fork: its base plus a diff
+)
+
+// Layer is a memory layer: a full memory file (and the VM state taken with
+// it) that children of a fork are restored from, and the base of their next
+// diffs. Parent is the layer it was merged from (a template id or another
+// layer), which gives the lineage.
+type Layer struct {
+	ID            string
+	Parent        string
+	Kind          string
+	Dir           string // vmstate, snapshot.json
+	Mem           string // the memory file
+	DirtyBytes    int64  // pages the diff added over Parent
+	SourceSandbox string // the sandbox that was forked
+	CreatedAt     time.Time
+}
+
+// InsertLayer records a layer.
+func (s *Store) InsertLayer(ctx context.Context, l *Layer) error {
+	if l.CreatedAt.IsZero() {
+		l.CreatedAt = time.Now()
+	}
+	_, err := s.db.ExecContext(ctx, `INSERT INTO layers (id, parent, kind, dir, mem, dirty_bytes, source_sandbox, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, l.ID, l.Parent, l.Kind, l.Dir, l.Mem, l.DirtyBytes, l.SourceSandbox, l.CreatedAt.UnixNano())
+	if isConstraint(err) {
+		return fmt.Errorf("%w: layer %s", ErrExists, l.ID)
+	}
+	return err
+}
+
+// GetLayer returns a layer.
+func (s *Store) GetLayer(ctx context.Context, id string) (*Layer, error) {
+	var l Layer
+	var created int64
+	err := s.db.QueryRowContext(ctx, `SELECT id, parent, kind, dir, mem, dirty_bytes, source_sandbox, created_at FROM layers WHERE id = ?`, id).
+		Scan(&l.ID, &l.Parent, &l.Kind, &l.Dir, &l.Mem, &l.DirtyBytes, &l.SourceSandbox, &created)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, fmt.Errorf("%w: layer %s", ErrNotFound, id)
+	}
+	l.CreatedAt = time.Unix(0, created)
+	return &l, err
+}
+
+// Lineage returns a layer and its ancestors, newest first, stopping at the
+// first id that is not a layer (the template).
+func (s *Store) Lineage(ctx context.Context, id string) ([]*Layer, error) {
+	var out []*Layer
+	for id != "" && len(out) < 10000 {
+		l, err := s.GetLayer(ctx, id)
+		if errors.Is(err, ErrNotFound) {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, l)
+		id = l.Parent
+	}
+	return out, nil
+}
+
+// SetBaseLayer records the layer a sandbox's next diff is relative to.
+func (s *Store) SetBaseLayer(ctx context.Context, sandboxID, layer string) error {
+	res, err := s.db.ExecContext(ctx, `UPDATE sandboxes SET base_layer = ?, updated_at = ? WHERE id = ?`, layer, time.Now().UnixNano(), sandboxID)
+	if err != nil {
+		return err
+	}
+	return mustAffect(res, sandboxID)
 }
