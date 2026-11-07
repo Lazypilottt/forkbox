@@ -99,7 +99,7 @@ func TestIntegrationForkTen(t *testing.T) {
 		if got := sh(t, m, c.ID, "sha256sum /tmp/big.bin | cut -d' ' -f1"); got != sum {
 			t.Errorf("child %s: /tmp/big.bin sha256 %s, parent's %s", c.ID, got, sum)
 		}
-		if pid := sh(t, m, c.ID, "pgrep -f fbx-counter | head -1"); pid == "" {
+		if pid := sh(t, m, c.ID, "pgrep -f [f]bx-counter | head -1"); pid == "" {
 			t.Errorf("child %s: counter process missing", c.ID)
 		}
 		first := counter(t, m, c.ID)

@@ -1,7 +1,7 @@
 # Node.js 22 LTS with git and npm.
 name: node
 base: node:22-slim
-apt: [git, ca-certificates, curl]
+apt: [git, ca-certificates, curl, procps]
 env:
   NODE_ENV: development
 warm_up:

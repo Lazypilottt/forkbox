@@ -80,6 +80,10 @@ func Open(path string) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
+	// One connection: SQLite runs one writer at a time anyway, and a
+	// deferred transaction that reads then writes gets SQLITE_BUSY at once
+	// (no busy timeout) when another connection is writing.
+	db.SetMaxOpenConns(1)
 	s := &Store{db: db}
 	if err := s.migrate(); err != nil {
 		db.Close()

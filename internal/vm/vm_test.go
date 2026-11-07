@@ -267,7 +267,10 @@ func TestSnapshotDiff(t *testing.T) {
 	if s.Type != SnapshotDiff {
 		t.Errorf("type = %s", s.Type)
 	}
-	checkBody(t, lastReq(h.last()), map[string]any{"snapshot_type": "Diff"})
+	checkBody(t, lastReq(h.last()), map[string]any{"snapshot_type": "Diff", "sync_snapshot_files": false})
+	if _, ok := lastReq(h.last()).Body["sync_snapshot_files"]; !ok {
+		t.Error("diff snapshots must not ask for fsync")
+	}
 	assertSteps(t, v, StepJail, StepConfigure, StepStart, StepBoot, StepPause, StepSnapshotDiff)
 	if _, err := m.Restore(ctx, dir, MemBackend{}, Config{Rootfs: h.config(t).Rootfs}); err == nil || !strings.Contains(err.Error(), "not resumable") {
 		t.Errorf("restore of a diff snapshot: got %v", err)

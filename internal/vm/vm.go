@@ -195,6 +195,14 @@ func (v *VM) snapshot(ctx context.Context, dir string, typ SnapshotType, step st
 	}
 	t := time.Now()
 	body := snapshotCreate{SnapshotType: string(typ), SnapshotPath: jailSnapVM, MemFilePath: jailSnapMem}
+	if typ == SnapshotDiff {
+		// A diff is merged into a layer and deleted right away, so it need
+		// not reach the disk: skipping fsync keeps the pause short
+		// (snapshot-support.md, "Syncing snapshot files"). Full snapshots,
+		// which templates keep, stay synced.
+		no := false
+		body.SyncSnapshotFiles = &no
+	}
 	if err := v.call(ctx, v.m.o.SnapshotTimeout, "PUT", "/snapshot/create", body); err != nil {
 		return nil, err
 	}

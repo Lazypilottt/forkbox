@@ -57,6 +57,8 @@ type snapshotCreate struct {
 	SnapshotType string `json:"snapshot_type"` // Full or Diff
 	SnapshotPath string `json:"snapshot_path"`
 	MemFilePath  string `json:"mem_file_path"`
+	// SyncSnapshotFiles (default true) fsyncs the files before answering.
+	SyncSnapshotFiles *bool `json:"sync_snapshot_files,omitempty"`
 }
 
 type memBackend struct {

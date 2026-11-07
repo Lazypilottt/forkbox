@@ -67,9 +67,13 @@ func TestIntegrationCheckpointRewind(t *testing.T) {
 	}
 
 	// Destroy the work, kill the processes.
-	sh(t, m, id, "rm -rf /root/project; pkill -f fbx-counter; pkill -f http.server; sleep 0.2")
-	if out := sh(t, m, id, "ls /root/project 2>&1 || true; pgrep -f fbx-counter || true"); !strings.Contains(out, "No such file") {
-		t.Fatalf("damage did not happen: %q", out)
+	// Brackets keep the patterns from matching the shell running them.
+	sh(t, m, id, "rm -rf /root/project; pkill -f [f]bx-counter; pkill -f [h]ttp.server; sleep 0.3")
+	if out := sh(t, m, id, "ls /root/project 2>&1 || true"); !strings.Contains(out, "No such file") {
+		t.Fatalf("project not removed: %q", out)
+	}
+	if out := sh(t, m, id, "pgrep -f [f]bx-counter || true; pgrep -f [h]ttp.server || true"); out != "" {
+		t.Fatalf("processes not killed: %q", out)
 	}
 
 	pidBefore := mustRecord(t, m, id).Pid
@@ -89,7 +93,7 @@ func TestIntegrationCheckpointRewind(t *testing.T) {
 	if log := sh(t, m, id, "cd /root/project && git log --oneline | wc -l"); log != "1" {
 		t.Errorf("git history: %q", log)
 	}
-	if sh(t, m, id, "pgrep -f fbx-counter | head -1") == "" {
+	if sh(t, m, id, "pgrep -f [f]bx-counter | head -1") == "" {
 		t.Error("counter process not back")
 	}
 	first := counter(t, m, id)
