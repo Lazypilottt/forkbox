@@ -331,3 +331,157 @@ func execOut(t *testing.T, d *daemon, id, cmd string) string {
 		out.Write(ev.GetStdout())
 	}
 }
+
+// Kill the daemon during a fork of 50: while the parent is paused for the
+// diff snapshot, and while children are being restored. After a restart the
+// parent must be running (resumed if it was left paused) and the half-made
+// children, their namespaces and any layer nobody uses must be gone.
+func TestIntegrationDaemonKilledMidFork(t *testing.T) {
+	data := datadir.FromEnv()
+	exists := func(glob string, except string) func() bool {
+		return func() bool {
+			m, _ := filepath.Glob(glob)
+			for _, p := range m {
+				if filepath.Base(p) != except {
+					return true
+				}
+			}
+			return false
+		}
+	}
+	for _, phase := range []string{"diff snapshot", "child restores"} {
+		d := startDaemon(t)
+		ctx := testCtx(t)
+		parent, err := d.c.CreateSandbox(ctx, &pb.CreateSandboxRequest{Template: "python"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		// Dirty memory, so the snapshot takes long enough to be interrupted.
+		execOut(t, d, parent.Id, `setsid python -c "b = bytearray(b'\x01') * (200 << 20); open('/tmp/ready', 'w').write('1'); import time; time.sleep(3600)" >/dev/null 2>&1 </dev/null &`)
+		waitFor(t, "allocation", func() bool { return execOut(t, d, parent.Id, "cat /tmp/ready 2>/dev/null || true") == "1" })
+
+		go d.c.ForkSandbox(context.Background(), &pb.ForkSandboxRequest{Id: parent.Id, N: 50})
+		if phase == "diff snapshot" {
+			waitFor(t, phase, exists(filepath.Join(data, "sandboxes", parent.Id, "diff-*"), ""))
+		} else {
+			waitFor(t, phase, exists(filepath.Join(data, "jail", "firecracker", "sb-*"), parent.Id))
+		}
+		d.kill()
+
+		d = startDaemon(t)
+		got, err := d.c.GetSandbox(ctx, &pb.GetSandboxRequest{Id: parent.Id})
+		if err != nil || got.State != "running" {
+			t.Fatalf("%s: parent after restart: %v %v\n%s", phase, got, err, readLog(d.log.Name()))
+		}
+		// An answer means the parent's vCPUs run again.
+		if out := execOut(t, d, parent.Id, "echo alive"); out != "alive\n" {
+			t.Errorf("%s: parent answered %q", phase, out)
+		}
+		list, _ := d.c.ListSandboxes(ctx, &pb.ListSandboxesRequest{})
+		if len(list.Sandboxes) != 1 {
+			t.Errorf("%s: %d sandboxes after restart, want only the parent", phase, len(list.Sandboxes))
+		}
+		for _, g := range []string{filepath.Join(data, "jail", "firecracker", "sb-*"), filepath.Join(data, "sandboxes", "sb-*"), "/run/netns/fbx-sb-*", "/sys/fs/cgroup/forkbox/sb-*"} {
+			m, _ := filepath.Glob(g)
+			for _, p := range m {
+				if !strings.HasSuffix(p, parent.Id) {
+					t.Errorf("%s: left behind: %s", phase, p)
+				}
+			}
+		}
+		if m, _ := filepath.Glob(filepath.Join(data, "sandboxes", parent.Id, "diff-*")); len(m) != 0 {
+			t.Errorf("%s: half-written diff left: %v", phase, m)
+		}
+		t.Logf("killed during %s: parent running, %s", phase, strings.TrimSpace(lastLine(readLog(d.log.Name()), "recover:")))
+		if _, err := d.c.DestroySandbox(ctx, &pb.DestroySandboxRequest{Id: parent.Id}); err != nil {
+			t.Fatal(err)
+		}
+		if m, _ := filepath.Glob(filepath.Join(data, "layers", "layer-*")); len(m) != 0 {
+			t.Errorf("%s: layers left after destroying everything: %v", phase, m)
+		}
+		d.stop()
+		assertNoSandboxLeftovers(t, d)
+	}
+}
+
+func lastLine(log, prefix string) string {
+	var last string
+	for _, l := range strings.Split(log, "\n") {
+		if strings.Contains(l, prefix) {
+			last = l
+		}
+	}
+	return last
+}
+
+// Stress: fork 10 at a time for FORKBOX_STRESS (e.g. 30m) and check that
+// forkboxd's memory and open file descriptors stay flat.
+func TestIntegrationDaemonStress(t *testing.T) {
+	dur, err := time.ParseDuration(os.Getenv("FORKBOX_STRESS"))
+	if err != nil || dur <= 0 {
+		t.Skip("set FORKBOX_STRESS=30m to run")
+	}
+	d := startDaemon(t)
+	defer func() { d.stop(); assertNoSandboxLeftovers(t, d) }()
+	ctx, cancel := context.WithTimeout(context.Background(), dur+10*time.Minute)
+	defer cancel()
+	parent, err := d.c.CreateSandbox(ctx, &pb.CreateSandboxRequest{Template: "python"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.c.DestroySandbox(context.Background(), &pb.DestroySandboxRequest{Id: parent.Id})
+	type sample struct {
+		at          time.Duration
+		rssKB, fds  int
+		forks, kids int
+	}
+	pid := d.cmd.Process.Pid
+	take := func(start time.Time, forks, kids int) sample {
+		s := sample{at: time.Since(start).Round(time.Second), forks: forks, kids: kids}
+		status, _ := os.ReadFile(fmt.Sprintf("/proc/%d/status", pid))
+		for _, l := range strings.Split(string(status), "\n") {
+			if f := strings.Fields(l); len(f) >= 2 && f[0] == "VmRSS:" {
+				fmt.Sscan(f[1], &s.rssKB)
+			}
+		}
+		fds, _ := os.ReadDir(fmt.Sprintf("/proc/%d/fd", pid))
+		s.fds = len(fds)
+		return s
+	}
+	start := time.Now()
+	var samples []sample
+	next := time.Minute
+	forks, kids := 0, 0
+	for time.Since(start) < dur {
+		res, err := d.c.ForkSandbox(ctx, &pb.ForkSandboxRequest{Id: parent.Id, N: 10})
+		if err != nil {
+			t.Fatalf("fork %d: %v", forks+1, err)
+		}
+		forks++
+		kids += len(res.Children)
+		// Touch the parent's memory a little, as real work would.
+		execOut(t, d, parent.Id, fmt.Sprintf("echo %d > /tmp/round", forks))
+		for _, c := range res.Children {
+			if _, err := d.c.DestroySandbox(ctx, &pb.DestroySandboxRequest{Id: c.Id}); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if time.Since(start) >= next {
+			samples = append(samples, take(start, forks, kids))
+			s := samples[len(samples)-1]
+			t.Logf("%8s: %4d forks, %5d children, forkboxd RSS %6d KiB, %3d fds", s.at, s.forks, s.kids, s.rssKB, s.fds)
+			next += time.Minute
+		}
+	}
+	if len(samples) < 4 {
+		t.Fatalf("only %d samples; run for at least 4 minutes", len(samples))
+	}
+	base, last := samples[1], samples[len(samples)-1] // after a minute of warm-up
+	if last.fds > base.fds+5 {
+		t.Errorf("file descriptors grew from %d to %d", base.fds, last.fds)
+	}
+	if last.rssKB > base.rssKB*13/10+8192 {
+		t.Errorf("RSS grew from %d KiB to %d KiB", base.rssKB, last.rssKB)
+	}
+	t.Logf("%d forks into %d children in %s; RSS %d -> %d KiB, fds %d -> %d", forks, kids, dur, base.rssKB, last.rssKB, base.fds, last.fds)
+}

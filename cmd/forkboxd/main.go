@@ -121,8 +121,8 @@ func run() error {
 		logger.Printf("recover: %v", err)
 	}
 	if rep != nil {
-		logger.Printf("recover: adopted %d running sandboxes %v, reaped %d %v, removed %d orphans %v",
-			len(rep.Adopted), rep.Adopted, len(rep.Reaped), rep.Reaped, len(rep.Orphans), rep.Orphans)
+		logger.Printf("recover: adopted %d running sandboxes %v (resumed %v), reaped %d %v, removed %d orphans %v",
+			len(rep.Adopted), rep.Adopted, rep.Resumed, len(rep.Reaped), rep.Reaped, len(rep.Orphans), rep.Orphans)
 	}
 
 	srv := &api.Server{B: sbm, ExposeHost: *exposeAddr}

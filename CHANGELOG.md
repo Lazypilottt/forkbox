@@ -4,6 +4,47 @@ All notable changes to Forkbox. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.0] - 2026-11-07
+
+Networking, live fork, checkpoints, the clone-correctness suite and the MCP
+server.
+
+### Added
+
+- Networking: every sandbox gets its own network namespace with the tap the
+  snapshot expects (same name, address and MAC everywhere) and a veth pair
+  with a unique /30 from a pool in SQLite. NAT gives each clone a unique
+  source address. Egress allows DNS, HTTP, HTTPS and ping, never cloud
+  metadata or other sandboxes. Port forwards for previews
+  (`sb.expose(port)`). Templates bake the guest network in.
+  `forkbox doctor` checks IPv4 forwarding.
+- Live fork (`sb.fork(n)`): pause, diff snapshot (no fsync), disk reflinks,
+  resume; the diff is merged onto the parent's base memory with
+  FICLONERANGE into one shared layer; children are restored in parallel.
+  Layer lineage in SQLite. Every step is timed.
+- Checkpoints: `sb.checkpoint(name)`, `sb.rewind(name)` (same id, network
+  slot and port forwards), `sb.restore_as_new(name)`, `sb.checkpoints()`,
+  `sb.delete_checkpoint(name)`. Layers are garbage-collected by reference.
+- Clone correctness: the agent writes `/run/forkbox/generation` after every
+  restore; the python template's `forkbox_guest` (loaded by sitecustomize)
+  reseeds `random`, numpy's global generator and OpenSSL in running
+  processes, and runs `on_restore` callbacks. An integration suite forks
+  one parent into 50 and checks randomness, identity, clocks, stale TCP
+  connections and isolation.
+- MCP server (`mcp/`, `forkbox-mcp`): create_sandbox, exec, read_file,
+  write_file, fork, checkpoint, rewind, list_sandboxes, destroy, over stdio.
+- `bench/fork_curve.py` with cold-boot, full-restore and `docker run`
+  baselines (`forkbox bench`).
+- Daemon recovery resumes a parent left paused by a fork cut short, and
+  removes half-written diffs and unrecorded layers and checkpoints.
+
+### Fixed
+
+- A restarted daemon reaped running sandboxes instead of adopting them (the
+  jailer passes `--id <id>` as two arguments); liveness now checks the VM's
+  cgroup.
+- `SQLITE_BUSY` under parallel restores; the store uses one connection.
+
 ## [0.1.0] - 2026-11-06
 
 First release: boot, guest agent, templates, create from template, daemon
@@ -49,4 +90,5 @@ and Python SDK. Single host, x86_64, Linux guests.
 - CI runs every integration test on real Firecracker microVMs on GitHub's
   KVM-capable runners.
 
+[0.2.0]: https://github.com/Lazypilottt/forkbox/releases/tag/v0.2.0
 [0.1.0]: https://github.com/Lazypilottt/forkbox/releases/tag/v0.1.0

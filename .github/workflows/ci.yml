@@ -9,6 +9,10 @@ on:
         description: "Also run bench/fork_curve.py (about 15 minutes)"
         type: boolean
         default: false
+      stress:
+        description: "Also run the 30-minute fork stress test"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -49,7 +53,7 @@ jobs:
     # GitHub's standard Linux runners expose hardware virtualization; the
     # job grants access to /dev/kvm and runs real Firecracker microVMs.
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-go@v6
@@ -115,6 +119,10 @@ jobs:
           sudo -n bin/forkbox templates inspect node
       - name: integration tests
         run: make integration GOTESTFLAGS="-v -timeout 40m"
+      # Before the workflow's own daemon starts: it starts its own.
+      - name: stress (fork 10 at a time for 30 minutes)
+        if: github.event_name == 'workflow_dispatch' && inputs.stress
+        run: go test -tags integration -count=1 -v -timeout 50m -exec 'sudo -n env FORKBOX_STRESS=30m' -run TestIntegrationDaemonStress ./cmd/forkboxd/
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"

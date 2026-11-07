@@ -295,6 +295,7 @@ func (m *Manager) List(ctx context.Context) ([]*store.Sandbox, error) {
 // RecoverReport says what Recover did.
 type RecoverReport struct {
 	Adopted []string // running VMs kept, now driven by id
+	Resumed []string // adopted VMs that were left paused (a fork cut short)
 	Reaped  []string // records whose VM was gone or half-made, removed
 	Orphans []string // jails, cgroups or dirs with no record, removed
 }
@@ -316,6 +317,23 @@ func (m *Manager) Recover(ctx context.Context) (*RecoverReport, error) {
 		known[r.ID] = true
 		if r.State == store.StateRunning && m.VMs.Alive(r.Pid, r.ID) {
 			rep.Adopted = append(rep.Adopted, r.ID)
+			// A daemon killed mid-fork or mid-checkpoint can leave the
+			// parent paused, and its diff half-written.
+			if tpl, err := template.Get(m.DataDir, r.Template); err == nil {
+				if v, err := m.vmFor(ctx, r, tpl); err != nil {
+					errs = append(errs, fmt.Errorf("attach %s: %w", r.ID, err))
+				} else if v.State() == vm.Paused {
+					if err := v.Resume(ctx); err != nil {
+						errs = append(errs, fmt.Errorf("resume %s: %w", r.ID, err))
+					} else {
+						rep.Resumed = append(rep.Resumed, r.ID)
+					}
+				}
+			}
+			diffs, _ := filepath.Glob(filepath.Join(r.Dir, "diff-*"))
+			for _, d := range diffs {
+				os.RemoveAll(d)
+			}
 			if err := m.restoreForwards(ctx, r.ID); err != nil {
 				errs = append(errs, fmt.Errorf("port forwards of %s: %w", r.ID, err))
 			}
