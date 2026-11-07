@@ -82,6 +82,9 @@ func (s *Server) restored(c net.Conn, r *agentpb.RestoredRequest) error {
 	s.mu.Lock()
 	s.sandboxID = r.SandboxId
 	s.mu.Unlock()
+	if err := s.bumpGeneration(); err != nil {
+		act("generation file: %v", err)
+	}
 	resp.Generation = s.generation.Load()
 	s.Log.Printf("restored as %s: %s", r.SandboxId, strings.Join(resp.Actions, "; "))
 	return agentwire.Write(c, &agentpb.Response{Msg: &agentpb.Response_Restored{Restored: resp}})
@@ -101,7 +104,29 @@ func (s *Server) OnNewGeneration() {
 	} else {
 		done = append(done, "machine-id "+id)
 	}
+	if err := s.bumpGeneration(); err != nil {
+		done = append(done, "generation file: "+err.Error())
+	}
 	s.Log.Printf("VM generation changed (%d): %s", g, strings.Join(done, "; "))
+}
+
+// GenerationFile changes after every restore of the VM (a counter and a
+// random token). Libraries that keep their own random state watch it to
+// reseed; templates/python/forkbox_guest.py does for Python.
+const GenerationFile = "/run/forkbox/generation"
+
+func (s *Server) bumpGeneration() error {
+	n := s.restores.Add(1)
+	p := s.GenerationFile
+	if p == "" {
+		p = GenerationFile
+	}
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		return err
+	}
+	b := make([]byte, 8)
+	_, _ = rand.Read(b)
+	return writeAtomicMode(p, fmt.Sprintf("%d %x\n", n, b), 0o644)
 }
 
 // reseed mixes extra plus 64 fresh local bytes into the kernel pool.
@@ -123,9 +148,11 @@ func (s *Server) newMachineID() (string, error) {
 	return id, writeAtomic(filepath.Join(s.EtcDir, "machine-id"), id+"\n")
 }
 
-func writeAtomic(path, content string) error {
+func writeAtomic(path, content string) error { return writeAtomicMode(path, content, 0o444) }
+
+func writeAtomicMode(path, content string, mode os.FileMode) error {
 	tmp := path + ".fbx-tmp"
-	if err := os.WriteFile(tmp, []byte(content), 0o444); err != nil {
+	if err := os.WriteFile(tmp, []byte(content), mode); err != nil {
 		return err
 	}
 	if err := os.Rename(tmp, path); err != nil {

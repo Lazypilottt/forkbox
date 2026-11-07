@@ -97,9 +97,13 @@ type Server struct {
 	// EtcDir is where machine-id and hostname are written (default /etc).
 	EtcDir string
 
+	// GenerationFile overrides agent.GenerationFile (tests).
+	GenerationFile string
+
 	sys        system
-	generation atomic.Uint64
-	sandboxID  string // guarded by mu
+	generation atomic.Uint64 // NEW_VMGENID uevents seen
+	restores   atomic.Uint64 // restores handled (uevents and Restored calls)
+	sandboxID  string        // guarded by mu
 
 	ctx    context.Context
 	cancel context.CancelFunc

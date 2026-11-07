@@ -44,6 +44,8 @@ func main() {
 		_ = fs.Parse(flag.Args()[1:])
 		*port = *p
 	}
+	// Marks a Forkbox guest for the clone hooks (templates/python).
+	_ = os.MkdirAll("/run/forkbox", 0o755)
 	gc, err := agent.LoadGuestConfig(agent.GuestConfigPath)
 	if err != nil {
 		logger.Printf("guest config: %v (using defaults)", err)

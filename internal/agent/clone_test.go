@@ -49,6 +49,7 @@ func TestRestored(t *testing.T) {
 	fs := &fakeSystem{now: time.Unix(1000, 0)}
 	s := New("test")
 	s.sys, s.EtcDir = fs, etc
+	s.GenerationFile = filepath.Join(etc, "run", "generation")
 
 	host := time.Unix(5000, 250)
 	resp := call(t, s, &agentpb.Request{Op: &agentpb.Request_Restored{Restored: &agentpb.RestoredRequest{
@@ -78,10 +79,17 @@ func TestRestored(t *testing.T) {
 		t.Errorf("info sandbox id = %q", in.SandboxId)
 	}
 
+	gen1, err := os.ReadFile(s.GenerationFile)
+	if err != nil || !strings.HasPrefix(string(gen1), "1 ") {
+		t.Errorf("generation file %q %v", gen1, err)
+	}
 	// A second clone gets a different machine-id.
 	resp2 := call(t, s, &agentpb.Request{Op: &agentpb.Request_Restored{Restored: &agentpb.RestoredRequest{SandboxId: "sb-2", Hostname: "sb-2"}}}).GetRestored()
 	if resp2.MachineId == resp.MachineId {
 		t.Errorf("machine-id repeated")
+	}
+	if gen2, _ := os.ReadFile(s.GenerationFile); !strings.HasPrefix(string(gen2), "2 ") || string(gen2) == string(gen1) {
+		t.Errorf("generation file did not change: %q", gen2)
 	}
 	bad := call(t, s, &agentpb.Request{Op: &agentpb.Request_Restored{Restored: &agentpb.RestoredRequest{SandboxId: "x", Hostname: "a b"}}})
 	if bad.GetError().GetCode() != agentpb.Error_INVALID_ARGUMENT {
@@ -94,6 +102,7 @@ func TestOnNewGeneration(t *testing.T) {
 	fs := &fakeSystem{}
 	s := New("test")
 	s.sys, s.EtcDir = fs, etc
+	s.GenerationFile = filepath.Join(etc, "generation")
 	s.OnNewGeneration()
 	s.OnNewGeneration()
 	if s.generation.Load() != 2 || len(fs.entropy) != 2 {
