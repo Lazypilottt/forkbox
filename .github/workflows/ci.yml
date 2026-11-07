@@ -4,6 +4,11 @@ on:
   push:
   pull_request:
   workflow_dispatch:
+    inputs:
+      bench:
+        description: "Also run bench/fork_curve.py (about 15 minutes)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -35,8 +40,8 @@ jobs:
           python-version: "3.12"
       - name: pytest
         run: |
-          python -m pip install -q -e 'sdk/python[test]'
-          python -m pytest -q sdk/python
+          python -m pip install -q -e 'sdk/python[test]' -e 'mcp[test]'
+          python -m pytest -q sdk/python mcp
 
   integration:
     name: integration tests (KVM)
@@ -116,16 +121,23 @@ jobs:
       - name: forkboxd
         run: |
           python -m venv "$RUNNER_TEMP/venv"
-          "$RUNNER_TEMP/venv/bin/pip" install -q -e 'sdk/python[test]'
+          "$RUNNER_TEMP/venv/bin/pip" install -q -e 'sdk/python[test]' -e 'mcp[test]' matplotlib
           sudo -n sh -c 'bin/forkboxd > /var/lib/forkbox/forkboxd.log 2>&1 &'
           for i in $(seq 1 50); do sudo -n test -S /var/lib/forkbox/run/forkboxd.sock && break; sleep 0.2; done
           sudo -n stat -c '%a %U %n' /var/lib/forkbox/run /var/lib/forkbox/run/forkboxd.sock
       - name: SDK against the daemon
-        run: sudo -n env FORKBOX_INTEGRATION=1 "$RUNNER_TEMP/venv/bin/python" -m pytest -v -m integration sdk/python
+        run: |
+          sudo -n env FORKBOX_INTEGRATION=1 "$RUNNER_TEMP/venv/bin/python" -m pytest -v -m integration sdk/python
+          sudo -n env FORKBOX_INTEGRATION=1 "$RUNNER_TEMP/venv/bin/python" -m pytest -v -m integration mcp
       - name: README quick start
         run: sudo -n "$RUNNER_TEMP/venv/bin/python" examples/quickstart.py
       - name: bench/restore.py
         run: sudo -n "$RUNNER_TEMP/venv/bin/python" bench/restore.py --runs 100
+      - name: bench/fork_curve.py
+        if: github.event_name == 'workflow_dispatch' && inputs.bench
+        run: |
+          sudo -n bin/forkbox templates build bench/fork-template.yaml
+          sudo -n "$RUNNER_TEMP/venv/bin/python" bench/fork_curve.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:

@@ -1,0 +1,9 @@
+# Template for bench/fork_curve.py: enough guest memory to dirty 1000 MB.
+name: bench
+base: python:3.12-slim
+apt: [procps]
+warm_up:
+  - python -c "print('ready')"
+vcpus: 2
+memory_mib: 2048
+disk_size_mib: 1024

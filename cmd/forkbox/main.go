@@ -35,6 +35,9 @@ Usage:
   forkbox templates build|list|inspect|rm ...
       Build and manage templates (forkbox templates for details).
 
+  forkbox bench coldboot|copyrestore TEMPLATE [--runs N]
+      Baseline timings for bench/fork_curve.py.
+
   forkbox version
       Print the CLI version and the pinned Firecracker release.
 
@@ -61,6 +64,8 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		return runSetup(ctx, args[1:], stdout, stderr)
 	case "templates":
 		return runTemplates(ctx, args[1:], stdout, stderr)
+	case "bench":
+		return runBench(ctx, args[1:], stdout, stderr)
 	case "version", "--version":
 		return runVersion(stdout, stderr)
 	case "help", "-h", "--help":
