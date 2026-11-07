@@ -75,6 +75,7 @@ func TestIntegrationForkTen(t *testing.T) {
 	}
 
 	atFork := counter(t, m, parent.ID)
+	forkStart := time.Now()
 	res, err := m.Fork(ctx, parent.ID, 10, 0)
 	if err != nil {
 		t.Fatal(err)
@@ -103,9 +104,12 @@ func TestIntegrationForkTen(t *testing.T) {
 			t.Errorf("child %s: counter process missing", c.ID)
 		}
 		first := counter(t, m, c.ID)
+		// The counter ticks every 50 ms from the parent's value at the
+		// pause; it cannot be further ahead than the time since the fork.
+		upper := atFork + int(time.Since(forkStart)/(50*time.Millisecond)) + 5
 		time.Sleep(300 * time.Millisecond)
 		second := counter(t, m, c.ID)
-		if first < atFork || first > atFork+200 || second <= first {
+		if first < atFork || first > upper || second <= first {
 			t.Errorf("child %s: counter %d then %d; parent was at %d when forking", c.ID, first, second, atFork)
 		}
 		if h := sh(t, m, c.ID, "hostname"); h != c.ID {

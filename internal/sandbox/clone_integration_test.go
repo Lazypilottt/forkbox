@@ -144,7 +144,11 @@ func TestIntegrationCloneCorrectness(t *testing.T) {
 	}
 	waitFile(parent.ID, "/tmp/probe.json")
 	waitFile(parent.ID, "/tmp/tcp-ready")
-	t.Logf("parent: vmgenid symbols in the guest kernel: %s", sh(t, m, parent.ID, "grep -ci vmgenid /proc/kallsyms || true"))
+	t.Logf("parent: vmgenid symbols in the guest kernel: %s; driver: %s", sh(t, m, parent.ID, "grep -ci vmgenid /proc/kallsyms || true"),
+		sh(t, m, parent.ID, "ls /sys/bus/acpi/drivers/ 2>/dev/null | grep -i gen || echo none; ls /sys/bus/platform/drivers 2>/dev/null | grep -i gen || true"))
+	// boot_id is generated on its first read. Read it before the fork, as
+	// any long-running guest process would have.
+	parentBoot := sh(t, m, parent.ID, "cat /proc/sys/kernel/random/boot_id")
 
 	res, err := m.Fork(ctx, parent.ID, 50, 0)
 	if err != nil {
@@ -219,14 +223,13 @@ func TestIntegrationCloneCorrectness(t *testing.T) {
 			}
 			return in.SandboxId
 		})
-		// boot_id is set once per kernel boot and is read-only; clones resume
-		// the same boot, so it is the same everywhere (random-for-clones.md).
-		boot := map[string]bool{}
+		// boot_id is generated on its first read and then fixed for the boot.
+		// Clones resume the same boot, so once it has been read before a
+		// fork, every clone reports the parent's (random-for-clones.md).
 		for _, id := range all {
-			boot[sh(t, m, id, "cat /proc/sys/kernel/random/boot_id")] = true
-		}
-		if len(boot) != 1 {
-			t.Errorf("boot_id differs across clones (%d values); the docs say it stays", len(boot))
+			if b := sh(t, m, id, "cat /proc/sys/kernel/random/boot_id"); b != parentBoot {
+				t.Errorf("%s: boot_id %s, parent's %s", id, b, parentBoot)
+			}
 		}
 		in, _ := m.Agent(kids[0]).Info(ctx)
 		t.Logf("VM generation ID changes seen by a child's agent: %d", in.Generation)
