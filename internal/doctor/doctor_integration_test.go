@@ -5,6 +5,7 @@ package doctor
 import (
 	"bytes"
 	"context"
+	"os"
 	"testing"
 
 	"github.com/Lazypilottt/forkbox/internal/datadir"
@@ -21,7 +22,8 @@ func TestDoctorPassesOnThisHost(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	results := Run(context.Background(), System{}, Config{DataDir: datadir.FromEnv(), Versions: v})
+	// FORKBOX_STORAGE=dmthin: the data dir need not reflink.
+	results := Run(context.Background(), System{}, Config{DataDir: datadir.FromEnv(), Versions: v, Storage: os.Getenv("FORKBOX_STORAGE")})
 	var buf bytes.Buffer
 	Print(&buf, results)
 	t.Log("\n" + buf.String())

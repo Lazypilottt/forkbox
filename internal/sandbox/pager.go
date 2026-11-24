@@ -43,14 +43,14 @@ const PagerStatsFile = "pagesrv.json"
 // from layer id (or a template id).
 func (m *Manager) layerSource(ctx context.Context, id string, tpl *template.Template) (string, memSource, error) {
 	if id == "" || id == tpl.ID {
-		return tpl.SnapshotDir(), memSource{File: filepath.Join(tpl.SnapshotDir(), vm.SnapshotMemFile)}, nil
+		return tpl.SnapshotDir(), fileSource(tpl, filepath.Join(tpl.SnapshotDir(), vm.SnapshotMemFile), m.Prefetch), nil
 	}
 	l, err := m.Store.GetLayer(ctx, id)
 	if err != nil {
 		return "", memSource{}, err
 	}
 	if l.Kind != store.LayerDiff {
-		return l.Dir, memSource{File: l.Mem}, nil
+		return l.Dir, fileSource(tpl, l.Mem, m.Prefetch), nil
 	}
 	lin, err := m.Store.Lineage(ctx, id)
 	if err != nil {
@@ -70,6 +70,18 @@ func (m *Manager) layerSource(ctx context.Context, id string, tpl *template.Temp
 	}
 	return l.Dir, memSource{Chain: chain, Prefetch: m.Prefetch}, nil
 }
+
+// fileSource restores from one full memory file: mapped by Firecracker, or
+// served by a page server for hugepage templates (Firecracker restores
+// hugetlbfs memory only through userfaultfd).
+func fileSource(tpl *template.Template, mem string, prefetch bool) memSource {
+	if hugePages(tpl) {
+		return memSource{Chain: []string{mem}, Prefetch: prefetch}
+	}
+	return memSource{File: mem}
+}
+
+func hugePages(tpl *template.Template) bool { return tpl.Spec.HugePages != "" }
 
 // backend returns the vm memory backend for src, starting a page server
 // for a chain. The returned function reports the page server's pid once

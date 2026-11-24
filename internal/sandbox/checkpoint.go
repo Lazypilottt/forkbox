@@ -161,7 +161,7 @@ func (m *Manager) RestoreAsNew(ctx context.Context, sandboxID, nameOrID string, 
 	if err != nil {
 		return nil, err
 	}
-	if err := m.checkDensity(1); err != nil {
+	if err := m.checkDensityTpl(tpl, 1, 0); err != nil {
 		return nil, err
 	}
 	egress, err := egressFor(tpl, nil)

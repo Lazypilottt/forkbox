@@ -189,3 +189,83 @@ func TestHandlerRejectsBadRegions(t *testing.T) {
 		t.Error("region past the file accepted")
 	}
 }
+
+// Hugetlbfs memory: each fault is served with one 2 MiB copy, assembled
+// from the chain's 4 KiB pages. Needs free hugepages on the host
+// (vm.nr_hugepages); skipped otherwise.
+func TestServeHugePages(t *testing.T) {
+	const huge = 2
+	const size = huge * HugePageSize
+	dir := t.TempDir()
+	mk := func(name string, fill map[int]byte) string {
+		p := filepath.Join(dir, name)
+		f, err := os.Create(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer f.Close()
+		f.Truncate(size)
+		for pg, b := range fill {
+			f.WriteAt(bytes.Repeat([]byte{b}, PageSize), int64(pg)*PageSize)
+		}
+		return p
+	}
+	// Base: 4 KiB page 0 and page 600 (in the second huge page); a diff
+	// rewrites page 1. The rest is holes.
+	base := mk("base", map[int]byte{0: 0x11, 1: 0x22, 600: 0x33})
+	diff := mk("diff", map[int]byte{1: 0x44})
+	c, err := NewChain([]string{diff, base})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+
+	if runtime.GOMAXPROCS(0) < 2 {
+		runtime.GOMAXPROCS(2)
+	}
+	fd, _, errno := unix.Syscall(unix.SYS_USERFAULTFD, uintptr(unix.O_CLOEXEC|unix.O_NONBLOCK|uffdUserModeOnly), 0, 0)
+	if errno != 0 {
+		t.Skipf("userfaultfd not available: %v", errno)
+	}
+	defer unix.Close(int(fd))
+	api := struct{ api, features, ioctls uint64 }{api: uffdAPI}
+	if _, _, e := unix.Syscall(unix.SYS_IOCTL, fd, uffdioAPI, uintptr(unsafe.Pointer(&api))); e != 0 {
+		t.Fatalf("UFFDIO_API: %v", e)
+	}
+	mem, err := unix.Mmap(-1, 0, size, unix.PROT_READ|unix.PROT_WRITE, unix.MAP_PRIVATE|unix.MAP_ANONYMOUS|unix.MAP_HUGETLB|unix.MAP_NORESERVE)
+	if err != nil {
+		t.Skipf("no hugetlbfs memory: %v", err)
+	}
+	defer unix.Munmap(mem)
+	base0 := uint64(uintptr(unsafe.Pointer(&mem[0])))
+	reg := struct{ start, len, mode, ioctls uint64 }{start: base0, len: size, mode: uffdioRegisterModeMissing}
+	if _, _, e := unix.Syscall(unix.SYS_IOCTL, fd, uffdioRegister, uintptr(unsafe.Pointer(&reg))); e != 0 {
+		t.Skipf("UFFDIO_REGISTER on hugetlbfs: %v", e)
+	}
+	free, _ := os.ReadFile("/sys/kernel/mm/hugepages/hugepages-2048kB/free_hugepages")
+	if n := bytes.TrimSpace(free); len(n) == 0 || string(n) == "0" || string(n) == "1" {
+		t.Skip("fewer than 2 free 2 MiB hugepages (vm.nr_hugepages)")
+	}
+	h, err := NewHandler(int(fd), []Region{{BaseHostVirtAddr: base0, Size: size, PageSize: HugePageSize}}, c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stop := make(chan struct{})
+	done := make(chan error, 1)
+	go func() { done <- h.Serve(stop) }()
+	for _, tc := range []struct {
+		page int
+		want byte
+	}{{0, 0x11}, {1, 0x44}, {2, 0}, {511, 0}, {512, 0}, {600, 0x33}, {1023, 0}} {
+		if got := mem[tc.page*PageSize]; got != tc.want {
+			t.Errorf("4 KiB page %d: %#x, want %#x", tc.page, got, tc.want)
+		}
+	}
+	close(stop)
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	if f := h.Stats.Faults.Load(); f != huge {
+		t.Errorf("%d faults for %d huge pages", f, huge)
+	}
+}

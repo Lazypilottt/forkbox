@@ -139,11 +139,15 @@ func (m *Manager) Boot(ctx context.Context, cfg Config) (*VM, error) {
 		path string
 		body any
 	}
-	reqs := []put{
-		{"/machine-config", machineConfig{VCPUCount: cfg.VCPUs, MemSizeMiB: cfg.MemMiB, SMT: false, TrackDirtyPages: true}},
+	var reqs []put
+	if len(cfg.CPUConfig) > 0 {
+		reqs = append(reqs, put{"/cpu-config", cfg.CPUConfig})
+	}
+	reqs = append(reqs, []put{
+		{"/machine-config", machineConfig{VCPUCount: cfg.VCPUs, MemSizeMiB: cfg.MemMiB, SMT: false, TrackDirtyPages: true, HugePages: cfg.HugePages}},
 		{"/boot-source", bootSource{KernelImagePath: jailKernel, BootArgs: cfg.kernelArgs()}},
 		{"/drives/rootfs", drive{DriveID: "rootfs", PathOnHost: jailRootfs, IsRootDevice: true, IsReadOnly: cfg.Rootfs.ReadOnly}},
-	}
+	}...)
 	if cfg.Vsock != nil {
 		reqs = append(reqs, put{"/vsock", vsockDev{GuestCID: cfg.Vsock.GuestCID, UDSPath: jailVsock}})
 	}

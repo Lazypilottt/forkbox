@@ -1,0 +1,15 @@
+# The python template's workload on 2 MiB hugetlbfs pages, to measure what
+# huge pages change (internal/sandbox/hugepages_integration_test.go). The
+# host needs a pool: sudo sysctl -w vm.nr_hugepages=1024 (2 GiB).
+name: python-huge
+base: python:3.12-slim
+apt: [ca-certificates, procps]
+pip: [numpy]
+env:
+  PYTHONUNBUFFERED: "1"
+warm_up:
+  - python -c "import numpy; numpy.ones(1000).sum()"
+vcpus: 2
+memory_mib: 512
+disk_size_mib: 2048
+huge_pages: 2M

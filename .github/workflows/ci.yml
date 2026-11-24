@@ -94,6 +94,12 @@ jobs:
             sudo iptables -I DOCKER-USER -s 10.200.0.0/16 -j ACCEPT
             sudo iptables -I DOCKER-USER -d 10.200.0.0/16 -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
           fi
+      # Operator step: a pool of 2 MiB pages for the hugepage template.
+      - name: hugepage pool
+        if: matrix.storage == 'reflink'
+        run: |
+          sudo sysctl -w vm.nr_hugepages=1024
+          grep -i huge /proc/meminfo
       - name: data dir (XFS with reflink, or ext4 for dmthin)
         run: |
           # A sparse loop file on whichever disk has more room.
@@ -128,6 +134,9 @@ jobs:
           sudo -n bin/forkbox templates list
           sudo -n bin/forkbox templates inspect python
           sudo -n bin/forkbox templates inspect node
+          if [ "${{ matrix.storage }}" = reflink ]; then
+            sudo -n bin/forkbox templates build bench/hugepages-template.yaml
+          fi
       - name: integration tests
         run: make integration GOTESTFLAGS="-v -timeout 40m" TESTENV="FORKBOX_STORAGE=${{ matrix.storage }}"
       # Before the workflow's own daemon starts: it starts its own.

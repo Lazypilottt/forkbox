@@ -180,11 +180,11 @@ func (m *Manager) warmOne(ctx context.Context, p *pools, name string) {
 }
 
 func (m *Manager) prepareWarm(ctx context.Context, name string, p *pools) (string, error) {
-	if err := m.checkDensity(1); err != nil {
-		return "", err
-	}
 	tpl, err := template.Get(m.DataDir, name)
 	if err != nil {
+		return "", err
+	}
+	if err := m.checkDensityTpl(tpl, 1, 0); err != nil {
 		return "", err
 	}
 	p.mu.Lock()
@@ -214,7 +214,7 @@ func (m *Manager) prepareWarm(ctx context.Context, name string, p *pools) (strin
 		if err := m.cloneDisk(ctx, tpl.Rootfs(), disk); err != nil {
 			return err
 		}
-		return m.restoreInto(ctx, c, tpl.SnapshotDir(), memSource{File: filepath.Join(tpl.SnapshotDir(), vm.SnapshotMemFile)}, disk)
+		return m.restoreInto(ctx, c, tpl.SnapshotDir(), fileSource(tpl, filepath.Join(tpl.SnapshotDir(), vm.SnapshotMemFile), false), disk)
 	}()
 	if err != nil {
 		_ = m.cleanup(ctx, id, rec.Dir)

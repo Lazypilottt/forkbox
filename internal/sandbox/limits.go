@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/Lazypilottt/forkbox/internal/store"
+	"github.com/Lazypilottt/forkbox/internal/template"
 	"github.com/Lazypilottt/forkbox/internal/vm"
 )
 
@@ -67,14 +68,12 @@ func (l Limits) apply(cfg *vm.Config) {
 // ErrDensity means the host has no room for another sandbox.
 var ErrDensity = errors.New("the host is at its sandbox density limit")
 
-// checkDensity refuses n more sandboxes when the host would pass
-// MaxSandboxes, or MemAvailable minus n times PerSandboxMiB would fall
-// under MinFreeMiB: better to fail fast than to let the host swap.
-func (m *Manager) checkDensity(n int) error { return m.checkDensityMiB(n, 0) }
-
-// checkDensityMiB is checkDensity with a known cost per sandbox (0: use
-// PerSandboxMiB). A uffd fork's children each hold a private copy of every
-// page they touch, so they cost about the parent's resident memory.
+// checkDensityMiB refuses n more sandboxes when the host would pass
+// MaxSandboxes, or MemAvailable minus n times the cost per sandbox would
+// fall under MinFreeMiB: better to fail fast than to let the host swap.
+// perMiB is a known cost per sandbox (0: PerSandboxMiB); a uffd fork's
+// children each hold a private copy of every page they touch, so they cost
+// about the parent's resident memory.
 func (m *Manager) checkDensityMiB(n, perMiB int) error {
 	if m.MaxSandboxes > 0 {
 		all, err := m.Store.ListSandboxes(context.Background())
@@ -103,6 +102,38 @@ func (m *Manager) checkDensityMiB(n, perMiB int) error {
 		}
 	}
 	return nil
+}
+
+// ErrHugePages means the host's hugepage pool cannot hold more sandboxes.
+var ErrHugePages = fmt.Errorf("%w: not enough free 2 MiB huge pages", ErrDensity)
+
+// checkDensityTpl is checkDensityMiB plus, for a hugepage template, the
+// host's free 2 MiB pages: Firecracker maps hugetlbfs memory without
+// reserving it, so a VM that outgrows the pool dies (SIGBUS). Each sandbox
+// is counted at its whole guest memory.
+func (m *Manager) checkDensityTpl(tpl *template.Template, n, perMiB int) error {
+	if err := m.checkDensityMiB(n, perMiB); err != nil {
+		return err
+	}
+	if !hugePages(tpl) {
+		return nil
+	}
+	free, err := freeHugePages()
+	if err != nil {
+		return fmt.Errorf("%w (%v)", ErrHugePages, err)
+	}
+	if need := n * tpl.MemMiB / 2; free < need {
+		return fmt.Errorf("%w: %d free, %d sandboxes of %s need %d (raise vm.nr_hugepages)", ErrHugePages, free, n, tpl.Name, need)
+	}
+	return nil
+}
+
+func freeHugePages() (int, error) {
+	b, err := os.ReadFile("/sys/kernel/mm/hugepages/hugepages-2048kB/free_hugepages")
+	if err != nil {
+		return 0, err
+	}
+	return strconv.Atoi(strings.TrimSpace(string(b)))
 }
 
 func memAvailableMiB() (int, bool) {

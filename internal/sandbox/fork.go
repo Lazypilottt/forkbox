@@ -111,7 +111,10 @@ func (m *Manager) ForkWith(ctx context.Context, parentID string, o ForkOptions) 
 			perChild = int(ms.Rss >> 20)
 		}
 	}
-	if err := m.checkDensityMiB(n, perChild); err != nil {
+	if hugePages(tpl) {
+		perChild = 0 // hugetlbfs memory is not in RSS; checkDensityTpl counts it
+	}
+	if err := m.checkDensityTpl(tpl, n, perChild); err != nil {
 		return nil, err
 	}
 	baseMem := ""
@@ -359,6 +362,13 @@ func (m *Manager) snapshotLayer(ctx context.Context, sb *store.Sandbox, v *vm.VM
 // sandbox whose memory is already a diff chain has no full base to merge
 // onto, so it stays on the page server.
 func (m *Manager) backendFor(ctx context.Context, sb *store.Sandbox, want string) (string, error) {
+	if tpl, err := template.Get(m.DataDir, sb.Template); err == nil && hugePages(tpl) {
+		// Hugetlbfs memory restores only through the page server.
+		if want == BackendMerge {
+			return "", fmt.Errorf("%w: template %s uses huge pages; fork it with the %s backend", vm.ErrConfig, tpl.Name, BackendUffd)
+		}
+		return BackendUffd, nil
+	}
 	if want == "" {
 		want = m.MemoryBackend
 	}

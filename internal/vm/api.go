@@ -16,10 +16,11 @@ import (
 // the pinned Firecracker release. Only the fields Forkbox sets are listed.
 
 type machineConfig struct {
-	VCPUCount       int  `json:"vcpu_count"`
-	MemSizeMiB      int  `json:"mem_size_mib"`
-	SMT             bool `json:"smt"`
-	TrackDirtyPages bool `json:"track_dirty_pages"`
+	VCPUCount       int    `json:"vcpu_count"`
+	MemSizeMiB      int    `json:"mem_size_mib"`
+	SMT             bool   `json:"smt"`
+	TrackDirtyPages bool   `json:"track_dirty_pages"`
+	HugePages       string `json:"huge_pages,omitempty"` // "None" (default), "Transparent" or "2M"
 }
 
 type bootSource struct {

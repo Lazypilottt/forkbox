@@ -169,7 +169,7 @@ func (m *Manager) Create(ctx context.Context, o CreateOptions) (*Created, error)
 		Jail: vm.JailDir(m.DataDir, id), Cgroup: m.VMs.CgroupPath(id),
 		Vsock: vm.VsockSocketPath(m.DataDir, id), TTL: o.TTL, Limits: o.Limits.encode(), Egress: pol,
 	}
-	if err := m.checkDensity(1); err != nil {
+	if err := m.checkDensityTpl(tpl, 1, 0); err != nil {
 		return nil, err
 	}
 	// Recorded before anything is created, so a reaper can always find it.
@@ -201,7 +201,7 @@ func (m *Manager) create(ctx context.Context, tpl *template.Template, rec *store
 	}
 	c.Timings.Disk = time.Since(t)
 	mem := filepath.Join(tpl.SnapshotDir(), vm.SnapshotMemFile)
-	if err := m.restoreInto(ctx, c, tpl.SnapshotDir(), memSource{File: mem}, disk); err != nil {
+	if err := m.restoreInto(ctx, c, tpl.SnapshotDir(), fileSource(tpl, mem, false), disk); err != nil {
 		return nil, err
 	}
 	c.Identity.TemplateID, c.Identity.TemplateMem = tpl.ID, mem
