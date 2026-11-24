@@ -18,6 +18,7 @@ func runPagesrv(args []string) error {
 	stats := fs.String("stats", "", "stats JSON file")
 	cgroup := fs.String("cgroup", "", "the VM's cgroup, joined after the handshake")
 	prefetch := fs.Bool("prefetch", false, "copy the newest layer's pages ahead of faults")
+	prefetched := fs.String("prefetched-file", "", "with --prefetch: create this file once the prefetch is done")
 	fs.String("id", "", "the sandbox id (lets the daemon find this process)")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -25,5 +26,5 @@ func runPagesrv(args []string) error {
 	if *socket == "" || *layers == "" {
 		return errors.New("--socket and --layers are required")
 	}
-	return pagesrvRun(*socket, strings.Split(*layers, ","), *uid, *gid, *stats, *cgroup, *prefetch)
+	return pagesrvRun(*socket, strings.Split(*layers, ","), *uid, *gid, *stats, *cgroup, *prefetch, *prefetched)
 }

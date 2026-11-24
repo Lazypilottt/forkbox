@@ -44,8 +44,8 @@ type Manager struct {
 	// MemoryBackend is how forks and checkpoints keep memory: BackendMerge
 	// (default) or BackendUffd.
 	MemoryBackend string
-	// Prefetch makes page servers copy the newest layer before the first
-	// fault (uffd backend).
+	// Prefetch makes page servers copy the newest layer in before the VM
+	// resumes (uffd backend; on by default, see waitPrefetch).
 	Prefetch bool
 	// Disks makes sandbox disks (default: reflinks).
 	Disks storage.Disks
@@ -75,7 +75,7 @@ type Manager struct {
 
 // New returns a manager.
 func New(dataDir string, vms *vm.Manager, st *store.Store, nm *netns.Manager) *Manager {
-	return &Manager{DataDir: dataDir, VMs: vms, Store: st, Net: nm, ExposeAddr: "127.0.0.1",
+	return &Manager{DataDir: dataDir, VMs: vms, Store: st, Net: nm, ExposeAddr: "127.0.0.1", Prefetch: true,
 		Log: log.New(io.Discard, "", 0), vms: map[string]*vm.VM{}, listeners: map[string][]net.Listener{}}
 }
 

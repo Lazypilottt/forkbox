@@ -72,6 +72,14 @@ jobs:
           grep -cwE 'vmx|svm' /proc/cpuinfo || echo "no vmx/svm flags"
           ls -l /dev/kvm || true
           cat /sys/fs/cgroup/cgroup.subtree_control
+          # Every run on these (KVM-on-KVM) runners so far lost restored VMs
+          # to KVM_EXIT_FAIL_ENTRY; see PROGRESS.md, "KVM host".
+          model=$(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2 | xargs)
+          case "$model" in
+            *6975P*)
+              echo "::error::Runner CPU $model stops restored microVMs under nested virtualization (KVM_EXIT_FAIL_ENTRY). Not a Forkbox failure: re-run the job to get another runner."
+              exit 1 ;;
+          esac
       - name: enable /dev/kvm
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
@@ -141,14 +149,6 @@ jobs:
       # (KVM_EXIT_FAIL_ENTRY); find out in a minute instead of 40.
       - name: host canary (restored microVMs stay up)
         run: |
-          # Every run on these (KVM-on-KVM) runners so far lost restored VMs
-          # to KVM_EXIT_FAIL_ENTRY; see PROGRESS.md, "KVM host".
-          model=$(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2 | xargs)
-          case "$model" in
-            *6975P*)
-              echo "::error::Runner CPU $model stops restored microVMs under nested virtualization (KVM_EXIT_FAIL_ENTRY). Not a Forkbox failure: re-run the job to get another runner."
-              exit 1 ;;
-          esac
           set +e
           go test -tags integration -count=1 -v -run TestIntegrationHostCanary \
             -exec "sudo -n env FORKBOX_CANARY=1 FORKBOX_STORAGE=${{ matrix.storage }}" ./internal/sandbox/ > canary.log 2>&1

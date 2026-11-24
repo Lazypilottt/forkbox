@@ -63,7 +63,7 @@ func run() error {
 	pool := flag.String("net-pool", netns.DefaultPool, "IPv4 pool for sandbox uplinks (one /30 each)")
 	exposeAddr := flag.String("expose-addr", "127.0.0.1", "host address port forwards listen on")
 	memBackend := flag.String("memory-backend", sandbox.BackendMerge, "how forks keep memory: merge (merged layers) or uffd (page server, layer chains)")
-	prefetch := flag.Bool("prefetch", false, "uffd: page servers copy a fork's dirty pages before the child asks")
+	prefetch := flag.Bool("prefetch", true, "uffd: page servers copy a fork's newest layer in before the child resumes")
 	warm := flag.String("warm", "", "warm pools, e.g. python=1:8,node=0:4 (template=min:max restored, paused sandboxes)")
 	warmBudget := flag.Int("warm-memory-mib", 4096, "memory budget for all warm pools, counting each sandbox at its template's memory size")
 	maxSandboxes := flag.Int("max-sandboxes", 0, "refuse creates and forks past this many sandboxes on the host (0: no cap)")

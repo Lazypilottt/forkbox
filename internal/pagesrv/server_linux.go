@@ -20,7 +20,10 @@ type Options struct {
 	UID, GID int      // Firecracker's ids, which must reach the socket
 	Prefetch bool     // copy the newest layer's pages before the first fault
 	Stats    string   // JSON stats file, rewritten every second and at exit
-	Cgroup   string   // the VM's cgroup: join it once it exists
+	// PrefetchedFile, when set, is created once the prefetch is done, so
+	// the caller can hold the VM's resume until then.
+	PrefetchedFile string
+	Cgroup         string // the VM's cgroup: join it once it exists
 	// AcceptTimeout bounds the wait for Firecracker (default 60 s).
 	AcceptTimeout time.Duration
 	// Ready is called once the socket listens (the caller can then start
@@ -138,6 +141,12 @@ func Run(o Options) (err error) {
 			return err
 		}
 		st.PrefetchMs = float64(time.Since(t).Microseconds()) / 1000
+		if o.PrefetchedFile != "" {
+			if err := os.WriteFile(o.PrefetchedFile, []byte(fmt.Sprintf("%.3f\n", st.PrefetchMs)), 0o644); err != nil {
+				close(stop)
+				return err
+			}
+		}
 	}
 	exited, err := pidExited(fcPid)
 	if err != nil {

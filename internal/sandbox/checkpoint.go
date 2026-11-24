@@ -320,6 +320,11 @@ func (m *Manager) restoreVMOnce(ctx context.Context, c *Created, snapDir string,
 	m.mu.Lock()
 	m.vms[rec.ID] = v
 	m.mu.Unlock()
+	if mem.Chain != nil && mem.Prefetch {
+		if err := m.waitPrefetch(ctx, rec); err != nil {
+			return err
+		}
+	}
 	c.Timings.Restore = time.Since(t)
 	if c.warm {
 		rec.Pid = v.Pid()

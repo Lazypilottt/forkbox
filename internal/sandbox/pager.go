@@ -39,6 +39,37 @@ type memSource struct {
 // PagerStatsFile is the page server's stats in a sandbox's directory.
 const PagerStatsFile = "pagesrv.json"
 
+// PrefetchedFile appears in a sandbox's directory when its page server has
+// copied the newest layer in; the VM resumes only then.
+const PrefetchedFile = "pagesrv.prefetched"
+
+// waitPrefetch holds a uffd VM's resume until its page server has copied
+// the newest layer in. KVM reads and writes some guest pages itself (the
+// paravirtual EOI flag, steal time, pvclock) and cannot always wait for a
+// page fault there; a restored child whose guest stopped taking interrupts,
+// vCPUs halted and no fault pending, pointed at that. Those pages are the
+// ones the parent's KVM kept writing, so they are in the newest layer.
+func (m *Manager) waitPrefetch(ctx context.Context, rec *store.Sandbox) error {
+	marker := filepath.Join(rec.Dir, PrefetchedFile)
+	deadline := time.Now().Add(30 * time.Second)
+	for {
+		if _, err := os.Stat(marker); err == nil {
+			return nil
+		}
+		if rec.PagerPid != 0 && !pagerAlive(rec.PagerPid, rec.ID) {
+			return fmt.Errorf("page server of %s exited during the prefetch (see %s)", rec.ID, filepath.Join(rec.Dir, "pagesrv.log"))
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("page server of %s: prefetch not done after 30 s", rec.ID)
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(time.Millisecond):
+		}
+	}
+}
+
 // layerSource returns the snapshot directory and memory source to restore
 // from layer id (or a template id).
 func (m *Manager) layerSource(ctx context.Context, id string, tpl *template.Template) (string, memSource, error) {
@@ -104,7 +135,9 @@ func (m *Manager) backend(ctx context.Context, rec *store.Sandbox, src memSource
 			"--uid", strconv.Itoa(vm.DefaultUID), "--gid", strconv.Itoa(vm.DefaultGID),
 			"--stats", filepath.Join(rec.Dir, PagerStatsFile), "--cgroup", m.VMs.CgroupPath(rec.ID), "--id", rec.ID}
 		if src.Prefetch {
-			args = append(args, "--prefetch")
+			marker := filepath.Join(rec.Dir, PrefetchedFile)
+			os.Remove(marker) // a rewind reuses the directory
+			args = append(args, "--prefetch", "--prefetched-file", marker)
 		}
 		cmd = exec.Command(bin, args...)
 		log, err := os.OpenFile(filepath.Join(rec.Dir, "pagesrv.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)

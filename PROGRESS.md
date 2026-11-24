@@ -976,6 +976,16 @@ named here. Numbers are from 2–4 vCPU nested-virtualization CI runners.
   cancels the others (`7bca744`). The page server now wakes the faulting
   thread when `UFFDIO_COPY` returns `EEXIST` (`d360337`), after a child hung
   on a page on an AMD runner.
+- **Intermittent stall of uffd children** (clone suite, about every other
+  run, AMD and Intel): the restored guest stops answering vsock after its
+  first ~2,600 faults. Diagnostics (`81847ce`) showed both vCPUs halted in
+  `kvm_vcpu_block`, the page server idle with no deferred fault, Firecracker
+  idle: the guest waits for an interrupt that never comes, not for a page.
+  Likely cause: KVM's own accesses to guest pages for paravirtual features
+  (EOI flag, steal time, pvclock) that cannot always wait for a userfault.
+  Those pages are the ones the parent's KVM kept writing, so they are in
+  the newest layer: the page server now prefetches it and the VM resumes
+  only after that (on by default, `--prefetch=false` to turn off).
 
 ### Task 13. `race`, async SDK, warm pools
 
