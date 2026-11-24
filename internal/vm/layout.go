@@ -66,3 +66,9 @@ func VsockSocketPath(dataDir, id string) string {
 
 // JailDir is a VM's jail directory, <data>/jail/firecracker/<id>.
 func JailDir(dataDir, id string) string { return layout{dataDir, id}.jailDir() }
+
+// ConsoleTail is the last n bytes of a VM's console log (the guest's
+// serial console and Firecracker's own output), or "".
+func ConsoleTail(dataDir, id string, n int64) string {
+	return tailFile(layout{dataDir, id}.consoleLog(), n)
+}

@@ -214,6 +214,10 @@ func (m *Manager) Teardown(ctx context.Context, id string) error {
 	if _, err := os.Stat(Path(id)); errors.Is(err, os.ErrNotExist) {
 		return nil
 	}
+	// The kernel frees a deleted namespace (and the veth pair in it) only
+	// once nothing holds it, asynchronously: delete the pair now, so the
+	// host end is gone when Teardown returns.
+	_ = m.Run(ctx, "", "ip", "-n", Name(id), "link", "del", NsVeth)
 	if err := m.Run(ctx, "", "ip", "netns", "del", Name(id)); err != nil {
 		if _, serr := os.Stat(Path(id)); errors.Is(serr, os.ErrNotExist) {
 			return nil

@@ -236,6 +236,12 @@ func (m *Manager) finishRestore(ctx context.Context, c *Created, v *vm.VM) error
 		if st, serr := m.PagerStats(rec.ID); serr == nil && st != nil {
 			err = fmt.Errorf("%w (page server: %v)", err, st)
 		}
+		if !m.VMs.Alive(rec.Pid, rec.ID) {
+			err = fmt.Errorf("%w; Firecracker (pid %d) has exited", err, rec.Pid)
+		}
+		if tail := vm.ConsoleTail(m.DataDir, rec.ID, 1500); tail != "" {
+			err = fmt.Errorf("%w\nconsole:\n%s", err, tail)
+		}
 		return err
 	}
 	c.Timings.Agent = time.Since(t)
