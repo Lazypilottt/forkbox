@@ -28,7 +28,7 @@ from ._client import DEFAULT_SOCKET
 from ._proto import forkbox_pb2 as pb
 from ._proto import forkbox_pb2_grpc
 from .errors import CommandError, ForkboxError, from_rpc
-from .sandbox import CHUNK, Attempt, Checkpoint, CreateTimings, ExecEvent, ExecResult, ForkTimings, _argv
+from .sandbox import CHUNK, Attempt, Checkpoint, CreateTimings, ExecEvent, ExecResult, ForkTimings, Limits, _argv, _create_request
 
 
 class AsyncClient:
@@ -130,6 +130,8 @@ class AsyncSandbox:
     parent: str = ""
     timings: CreateTimings | None = None
     last_fork: ForkTimings | None = None
+    limits: Limits | None = None
+    error: str = ""
     _client: AsyncClient = field(default_factory=default_client, repr=False, compare=False)
 
     @property
@@ -141,15 +143,18 @@ class AsyncSandbox:
         t = None
         if m.HasField("timings"):
             t = CreateTimings(m.timings.total_ms, m.timings.disk_ms, m.timings.restore_ms,
-                              m.timings.resume_ms, m.timings.agent_ms, m.timings.identity_ms)
+                              m.timings.resume_ms, m.timings.agent_ms, m.timings.identity_ms, m.timings.from_pool)
         return cls(m.id, m.template, m.template_id, m.state, m.pid,
                    datetime.fromtimestamp(m.created_at_unix_ms / 1000, tz=timezone.utc), m.ttl_s or None, m.parent, t,
+                   limits=Limits._from_pb(m.limits) if m.HasField("limits") else None, error=m.error,
                    _client=client)
 
     @classmethod
-    async def create(cls, template: str = "python", ttl: int | None = None, *, client: AsyncClient | None = None) -> AsyncSandbox:
+    async def create(cls, template: str = "python", ttl: int | None = None, *, cpus: float | None = None,
+                     memory_mib: int | None = None, pids_max: int | None = None,
+                     client: AsyncClient | None = None) -> AsyncSandbox:
         c = client or default_client()
-        m = await _call(c.stub.CreateSandbox(pb.CreateSandboxRequest(template=template, ttl_s=ttl or 0), metadata=c.metadata))
+        m = await _call(c.stub.CreateSandbox(_create_request(template, ttl, cpus, memory_mib, pids_max), metadata=c.metadata))
         return cls._from_pb(m, c)
 
     @classmethod

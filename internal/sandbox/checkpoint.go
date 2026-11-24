@@ -161,6 +161,9 @@ func (m *Manager) RestoreAsNew(ctx context.Context, sandboxID, nameOrID string, 
 	if err != nil {
 		return nil, err
 	}
+	if err := m.checkDensity(1); err != nil {
+		return nil, err
+	}
 	start := time.Now()
 	nid := IDPrefix + randHex(6)
 	rec := &store.Sandbox{
@@ -270,8 +273,9 @@ func (m *Manager) restoreVM(ctx context.Context, c *Created, snapDir string, mem
 	rec := c.Sandbox
 	t := time.Now()
 	backend, pagerPid := m.backend(ctx, rec, mem)
-	v, err := m.VMs.Restore(ctx, snapDir, backend,
-		vm.Config{ID: rec.ID, Rootfs: vm.Drive{Path: disk}, NetNS: netns.Path(rec.ID)})
+	cfg := vm.Config{ID: rec.ID, Rootfs: vm.Drive{Path: disk}, NetNS: netns.Path(rec.ID)}
+	ParseLimits(rec.Limits).apply(&cfg)
+	v, err := m.VMs.Restore(ctx, snapDir, backend, cfg)
 	if pid := pagerPid(); pid != 0 {
 		// Recorded even if the restore failed, so cleanup kills it.
 		rec.PagerPid = pid

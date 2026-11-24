@@ -188,6 +188,7 @@ message RestoredRequest {
   string hostname = 2;
   int64 realtime_unix_nano = 3; // host clock when sent
   bytes entropy = 4;            // random bytes from the host (up to 512)
+  uint32 pids_max = 5;          // limit processes started through exec (0: none)
 }
 
 message RestoredResponse {

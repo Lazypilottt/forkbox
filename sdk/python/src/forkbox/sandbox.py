@@ -89,6 +89,29 @@ class Checkpoint:
 
 
 @dataclass(frozen=True)
+class Limits:
+    """Per-sandbox resource limits; ``None`` means no limit. Forks inherit them."""
+
+    cpus: float | None = None        # host CPU time, in CPUs (0.5: half of one)
+    memory_mib: int | None = None    # host memory for the VM, at least the guest's + 64
+    pids_max: int | None = None      # processes started through exec, with their children
+
+    def _pb(self) -> pb.Limits | None:
+        if self == Limits():
+            return None
+        return pb.Limits(cpus=self.cpus or 0, memory_mib=self.memory_mib or 0, pids_max=self.pids_max or 0)
+
+    @classmethod
+    def _from_pb(cls, m: pb.Limits) -> Limits:
+        return cls(m.cpus or None, m.memory_mib or None, m.pids_max or None)
+
+
+def _create_request(template: str, ttl: int | None, cpus, memory_mib, pids_max) -> pb.CreateSandboxRequest:
+    return pb.CreateSandboxRequest(template=template, ttl_s=ttl or 0,
+                                   limits=Limits(cpus, memory_mib, pids_max)._pb())
+
+
+@dataclass(frozen=True)
 class CreateTimings:
     total_ms: float
     disk_ms: float
@@ -205,6 +228,8 @@ class Sandbox:
     # Page server counters (faults, copied, zeroed, fault_p50_us, ...) for a
     # sandbox whose memory is served from a layer chain; from get().
     pager: dict[str, float] | None = None
+    limits: Limits | None = None
+    error: str = ""  # why it failed, when state is "failed"
     _client: Client = field(default_factory=default_client, repr=False, compare=False)
 
     @property
@@ -224,14 +249,20 @@ class Sandbox:
             created_at=datetime.fromtimestamp(m.created_at_unix_ms / 1000, tz=timezone.utc),
             ttl=m.ttl_s or None, parent=m.parent, timings=t, _client=client,
             pager={f.name: v for f, v in m.pager.ListFields()} if m.HasField("pager") else None,
+            limits=Limits._from_pb(m.limits) if m.HasField("limits") else None, error=m.error,
         )
 
     @classmethod
-    def create(cls, template: str = "python", ttl: int | None = None, *, client: Client | None = None) -> Sandbox:
-        """Restore a new sandbox from a template. ``ttl`` is in seconds."""
+    def create(cls, template: str = "python", ttl: int | None = None, *, cpus: float | None = None,
+               memory_mib: int | None = None, pids_max: int | None = None, client: Client | None = None) -> Sandbox:
+        """Restore a new sandbox from a template. ``ttl`` is in seconds.
+
+        ``cpus``, ``memory_mib`` and ``pids_max`` cap the sandbox (see
+        :class:`Limits`). When the host is at its density limit this raises
+        :class:`ResourceExhaustedError` at once."""
         c = client or default_client()
         try:
-            m = c.stub.CreateSandbox(pb.CreateSandboxRequest(template=template, ttl_s=ttl or 0), metadata=c.metadata)
+            m = c.stub.CreateSandbox(_create_request(template, ttl, cpus, memory_mib, pids_max), metadata=c.metadata)
         except grpc.RpcError as e:
             raise from_rpc(e) from None
         return cls._from_pb(m, c)

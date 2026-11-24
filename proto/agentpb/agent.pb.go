@@ -1714,6 +1714,7 @@ type RestoredRequest struct {
 	Hostname         string                 `protobuf:"bytes,2,opt,name=hostname,proto3" json:"hostname,omitempty"`
 	RealtimeUnixNano int64                  `protobuf:"varint,3,opt,name=realtime_unix_nano,json=realtimeUnixNano,proto3" json:"realtime_unix_nano,omitempty"` // host clock when sent
 	Entropy          []byte                 `protobuf:"bytes,4,opt,name=entropy,proto3" json:"entropy,omitempty"`                                              // random bytes from the host (up to 512)
+	PidsMax          uint32                 `protobuf:"varint,5,opt,name=pids_max,json=pidsMax,proto3" json:"pids_max,omitempty"`                              // limit processes started through exec (0: none)
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -1774,6 +1775,13 @@ func (x *RestoredRequest) GetEntropy() []byte {
 		return x.Entropy
 	}
 	return nil
+}
+
+func (x *RestoredRequest) GetPidsMax() uint32 {
+	if x != nil {
+		return x.PidsMax
+	}
+	return 0
 }
 
 type RestoredResponse struct {
@@ -1965,13 +1973,14 @@ const file_agent_proto_rawDesc = "" +
 	"sandbox_id\x18\a \x01(\tR\tsandboxId\x12\x1e\n" +
 	"\n" +
 	"generation\x18\b \x01(\x04R\n" +
-	"generation\"\x94\x01\n" +
+	"generation\"\xaf\x01\n" +
 	"\x0fRestoredRequest\x12\x1d\n" +
 	"\n" +
 	"sandbox_id\x18\x01 \x01(\tR\tsandboxId\x12\x1a\n" +
 	"\bhostname\x18\x02 \x01(\tR\bhostname\x12,\n" +
 	"\x12realtime_unix_nano\x18\x03 \x01(\x03R\x10realtimeUnixNano\x12\x18\n" +
-	"\aentropy\x18\x04 \x01(\fR\aentropy\"\x8f\x01\n" +
+	"\aentropy\x18\x04 \x01(\fR\aentropy\x12\x19\n" +
+	"\bpids_max\x18\x05 \x01(\rR\apidsMax\"\x8f\x01\n" +
 	"\x10RestoredResponse\x12\"\n" +
 	"\rclock_step_ns\x18\x01 \x01(\x03R\vclockStepNs\x12\x1d\n" +
 	"\n" +

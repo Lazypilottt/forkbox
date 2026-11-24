@@ -65,6 +65,10 @@ func run() error {
 	prefetch := flag.Bool("prefetch", false, "uffd: page servers copy a fork's dirty pages before the child asks")
 	warm := flag.String("warm", "", "warm pools, e.g. python=1:8,node=0:4 (template=min:max restored, paused sandboxes)")
 	warmBudget := flag.Int("warm-memory-mib", 4096, "memory budget for all warm pools, counting each sandbox at its template's memory size")
+	maxSandboxes := flag.Int("max-sandboxes", 0, "refuse creates and forks past this many sandboxes on the host (0: no cap)")
+	minFree := flag.Int("min-free-memory-mib", 256, "refuse creates and forks that would leave less available host memory than this (0: off)")
+	perSandbox := flag.Int("per-sandbox-mib", 32, "host memory a new sandbox is assumed to need, for --min-free-memory-mib (sandboxes share their template's memory until they write)")
+	reapEvery := flag.Duration("reap-sweep", 15*time.Second, "how often to look for sandboxes whose VM or page server died")
 	showVersion := flag.Bool("version", false, "print the version and exit")
 	flag.Parse()
 	if *showVersion {
@@ -122,6 +126,7 @@ func run() error {
 	sbm.ExposeAddr = *exposeAddr
 	sbm.MemoryBackend = *memBackend
 	sbm.Prefetch = *prefetch
+	sbm.MaxSandboxes, sbm.MinFreeMiB, sbm.PerSandboxMiB = *maxSandboxes, *minFree, *perSandbox
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
@@ -189,6 +194,24 @@ func run() error {
 		logger.Printf("HTTP gateway on tcp:%s (bearer token required)", ln.Addr())
 	}
 
+	go func() {
+		t := time.NewTicker(*reapEvery)
+		defer t.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+				done, err := sbm.Sweep(ctx)
+				if len(done) > 0 {
+					logger.Printf("reaper: removed %v", done)
+				}
+				if err != nil {
+					logger.Printf("reaper: %v", err)
+				}
+			}
+		}
+	}()
 	go func() {
 		t := time.NewTicker(*sweep)
 		defer t.Stop()

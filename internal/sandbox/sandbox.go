@@ -49,6 +49,10 @@ type Manager struct {
 	// PagerBinary runs the page server ("<it> pagesrv ..."); default: this
 	// executable (forkboxd).
 	PagerBinary string
+	// Density limits (0: off): at most MaxSandboxes, and creates are
+	// refused when MemAvailable minus PerSandboxMiB each would fall under
+	// MinFreeMiB.
+	MaxSandboxes, MinFreeMiB, PerSandboxMiB int
 	// AgentTimeout bounds the wait for the agent after resume (default 30 s).
 	AgentTimeout time.Duration
 	Log          *log.Logger
@@ -59,6 +63,7 @@ type Manager struct {
 	listeners map[string][]net.Listener // port forwards, by sandbox
 	forkLocks map[string]*sync.Mutex    // one fork at a time per parent
 	gcMu      sync.Mutex
+	reaped    reapCounters
 }
 
 // New returns a manager.
@@ -75,6 +80,7 @@ type CreateOptions struct {
 	Template string        // name or id
 	TTL      time.Duration // 0: lives until destroyed
 	ID       string        // optional; generated when empty
+	Limits   Limits
 }
 
 // Timings of one Create, for benchmarks.
@@ -121,7 +127,11 @@ func (m *Manager) Create(ctx context.Context, o CreateOptions) (*Created, error)
 	if err != nil {
 		return nil, err
 	}
-	if o.ID == "" {
+	if err := o.Limits.validate(tpl.MemMiB); err != nil {
+		return nil, err
+	}
+	// Pool sandboxes already count against the density limit.
+	if o.ID == "" && o.Limits == (Limits{}) {
 		if c, ok := m.fromPool(ctx, tpl, o.TTL); ok {
 			c.Timings.Total = time.Since(start)
 			return c, nil
@@ -142,7 +152,10 @@ func (m *Manager) Create(ctx context.Context, o CreateOptions) (*Created, error)
 	rec := &store.Sandbox{
 		ID: id, Template: tpl.ID, TemplateName: tpl.Name, State: store.StateCreating, Dir: dir, BaseLayer: tpl.ID,
 		Jail: vm.JailDir(m.DataDir, id), Cgroup: m.VMs.CgroupPath(id),
-		Vsock: vm.VsockSocketPath(m.DataDir, id), TTL: o.TTL,
+		Vsock: vm.VsockSocketPath(m.DataDir, id), TTL: o.TTL, Limits: o.Limits.encode(),
+	}
+	if err := m.checkDensity(1); err != nil {
+		return nil, err
 	}
 	// Recorded before anything is created, so a reaper can always find it.
 	if err := m.Store.InsertSandbox(ctx, rec); err != nil {
@@ -228,7 +241,7 @@ func (m *Manager) finishRestore(ctx context.Context, c *Created, v *vm.VM) error
 	if _, err := rand.Read(entropy); err != nil {
 		return err
 	}
-	r, err := ac.Restored(ctx, rec.ID, rec.ID, entropy)
+	r, err := ac.Restored(ctx, rec.ID, rec.ID, entropy, ParseLimits(rec.Limits).PidsMax)
 	if err != nil {
 		return fmt.Errorf("agent restored: %w", err)
 	}

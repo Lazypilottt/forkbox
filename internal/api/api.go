@@ -60,7 +60,11 @@ func (s *Server) CreateSandbox(ctx context.Context, r *pb.CreateSandboxRequest) 
 	if r.Template == "" {
 		return nil, status.Error(codes.InvalidArgument, "template is required")
 	}
-	c, err := s.B.Create(ctx, sandbox.CreateOptions{Template: r.Template, TTL: time.Duration(r.TtlS) * time.Second})
+	opts := sandbox.CreateOptions{Template: r.Template, TTL: time.Duration(r.TtlS) * time.Second}
+	if l := r.Limits; l != nil {
+		opts.Limits = sandbox.Limits{CPUs: l.Cpus, MemoryMiB: int(l.MemoryMib), PidsMax: int(l.PidsMax)}
+	}
+	c, err := s.B.Create(ctx, opts)
 	if err != nil {
 		return nil, toStatus(err)
 	}
@@ -334,10 +338,15 @@ func (s *Server) WriteFile(stream grpc.ClientStreamingServer[pb.WriteFileRequest
 }
 
 func toPB(sb *store.Sandbox) *pb.Sandbox {
-	return &pb.Sandbox{
+	out := &pb.Sandbox{
 		Id: sb.ID, Template: sb.TemplateName, TemplateId: sb.Template, Parent: sb.Parent, State: sb.State,
 		CreatedAtUnixMs: sb.CreatedAt.UnixMilli(), TtlS: uint64(sb.TTL / time.Second), Pid: int32(sb.Pid),
+		Error: sb.Error,
 	}
+	if l := sandbox.ParseLimits(sb.Limits); l != (sandbox.Limits{}) {
+		out.Limits = &pb.Limits{Cpus: l.CPUs, MemoryMib: uint32(l.MemoryMiB), PidsMax: uint32(l.PidsMax)}
+	}
+	return out
 }
 
 // toStatus maps errors to the codes documented in forkbox.proto.
@@ -359,7 +368,7 @@ func toStatus(err error) error {
 		code = codes.NotFound
 	case errors.Is(err, store.ErrExists):
 		code = codes.AlreadyExists
-	case errors.Is(err, store.ErrNoSlot):
+	case errors.Is(err, store.ErrNoSlot), errors.Is(err, sandbox.ErrDensity):
 		code = codes.ResourceExhausted
 	case errors.Is(err, fs.ErrInvalid), errors.Is(err, vm.ErrConfig), errors.Is(err, template.ErrSpec):
 		code = codes.InvalidArgument

@@ -60,6 +60,10 @@ func (s *Server) exec(c net.Conn, r *agentpb.ExecRequest) error {
 	}
 	// Its own process group, so timeouts and signals reach its children.
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	s.mu.Lock()
+	limitFD := s.execCgroupFD
+	s.mu.Unlock()
+	setCgroup(cmd.SysProcAttr, limitFD)
 	outR, outW, err := os.Pipe()
 	if err != nil {
 		return writeErr(c, err)

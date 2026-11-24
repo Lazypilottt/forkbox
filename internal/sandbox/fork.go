@@ -96,6 +96,9 @@ func (m *Manager) ForkWith(ctx context.Context, parentID string, o ForkOptions) 
 	if parent.State != store.StateRunning {
 		return nil, fmt.Errorf("%w: sandbox %s is %s", vm.ErrState, parentID, parent.State)
 	}
+	if err := m.checkDensity(n); err != nil {
+		return nil, err
+	}
 	tpl, err := template.Get(m.DataDir, parent.Template)
 	if err != nil {
 		return nil, err
@@ -133,6 +136,7 @@ func (m *Manager) ForkWith(ctx context.Context, parentID string, o ForkOptions) 
 			ID: id, Template: parent.Template, TemplateName: parent.TemplateName, Parent: parentID,
 			State: store.StateCreating, Dir: Dir(m.DataDir, id), Jail: vm.JailDir(m.DataDir, id),
 			Cgroup: m.VMs.CgroupPath(id), Vsock: vm.VsockSocketPath(m.DataDir, id), TTL: parent.TTL, BaseLayer: res.Layer,
+			Limits: parent.Limits,
 		}
 		if err := m.Store.InsertSandbox(ctx, rec); err != nil {
 			return fail(err)
@@ -227,16 +231,7 @@ func (m *Manager) vmFor(ctx context.Context, sb *store.Sandbox, tpl *template.Te
 }
 
 func (m *Manager) lockFork(id string) func() {
-	m.mu.Lock()
-	if m.forkLocks == nil {
-		m.forkLocks = map[string]*sync.Mutex{}
-	}
-	l := m.forkLocks[id]
-	if l == nil {
-		l = &sync.Mutex{}
-		m.forkLocks[id] = l
-	}
-	m.mu.Unlock()
+	l := m.forkLock(id)
 	l.Lock()
 	return l.Unlock
 }

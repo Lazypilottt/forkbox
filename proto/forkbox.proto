@@ -80,6 +80,8 @@ message Sandbox {
   int32 pid = 8;          // Firecracker process on the host
   CreateTimings timings = 9; // only in the CreateSandbox answer
   PagerStats pager = 10;     // uffd-backed sandboxes, in GetSandbox
+  Limits limits = 11;        // unset: none
+  string error = 12;         // why it failed (state failed)
 }
 
 // The page server's counters for a sandbox whose memory is served from a
@@ -108,6 +110,15 @@ message CreateTimings {
 message CreateSandboxRequest {
   string template = 1; // name or id
   uint64 ttl_s = 2;
+  Limits limits = 3;   // unset: the template's VM size, no extra caps
+}
+
+// Per-sandbox limits, enforced by the sandbox's cgroup on the host (CPU,
+// memory) and in the guest (processes). Forks inherit them. Zero: no limit.
+message Limits {
+  double cpus = 1;        // CPU time, in CPUs (0.5: half of one)
+  uint32 memory_mib = 2;  // host memory for the VM process; at least the guest's + 64
+  uint32 pids_max = 3;    // processes started through exec, with their children
 }
 
 message GetSandboxRequest {

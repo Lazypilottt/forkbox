@@ -19,7 +19,9 @@ from .errors import (
     UnauthenticatedError,
     UnavailableError,
 )
-from .sandbox import Attempt, Checkpoint, CreateTimings, ExecEvent, ExecResult, FileSystem, ForkTimings, RaceResult, Sandbox, pool_stats
+from .sandbox import (
+    Attempt, Checkpoint, CreateTimings, ExecEvent, ExecResult, FileSystem, ForkTimings, Limits, RaceResult, Sandbox, pool_stats,
+)
 
 __version__ = "0.1.0"
 
@@ -38,6 +40,7 @@ __all__ = [
     "ForkTimings",
     "ForkboxError",
     "InvalidArgumentError",
+    "Limits",
     "NotFoundError",
     "RaceResult",
     "ResourceExhaustedError",

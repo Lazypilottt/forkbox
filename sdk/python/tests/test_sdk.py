@@ -31,6 +31,23 @@ def test_create_get_list_destroy(daemon):
     sb.destroy()  # already gone: not an error
 
 
+def test_create_with_limits(daemon):
+    sb = Sandbox.create("python", cpus=0.5, memory_mib=1024, pids_max=64)
+    assert sb.limits == forkbox.Limits(cpus=0.5, memory_mib=1024, pids_max=64)
+    assert Sandbox.create("python").limits is None
+    with pytest.raises(InvalidArgumentError, match="at least"):
+        Sandbox.create("python", memory_mib=100)
+
+
+def test_density_limit_fails_fast(daemon):
+    daemon.max_sandboxes = 1
+    Sandbox.create("python")
+    start = time.monotonic()
+    with pytest.raises(forkbox.ResourceExhaustedError, match="density"):
+        Sandbox.create("python")
+    assert time.monotonic() - start < 1
+
+
 def test_create_errors(daemon):
     with pytest.raises(NotFoundError) as e:
         Sandbox.create("ruby")

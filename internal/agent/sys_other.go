@@ -49,3 +49,5 @@ func (otherSystem) AddEntropy([]byte) error  { return errors.New("not supported 
 func (otherSystem) SetHostname(string) error { return errors.New("not supported off Linux") }
 func (s *Server) WatchVMGenID() error        { return errors.New("uevents are Linux-only") }
 func isNewVMGenID([]byte) bool               { return false }
+
+func (s *Server) setPidsMax(int) error { return errors.New("process limits are Linux-only") }

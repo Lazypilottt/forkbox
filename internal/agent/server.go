@@ -100,10 +100,11 @@ type Server struct {
 	// GenerationFile overrides agent.GenerationFile (tests).
 	GenerationFile string
 
-	sys        system
-	generation atomic.Uint64 // NEW_VMGENID uevents seen
-	restores   atomic.Uint64 // restores handled (uevents and Restored calls)
-	sandboxID  string        // guarded by mu
+	sys          system
+	execCgroupFD int           // guarded by mu: ExecCgroup, once a process limit is set
+	generation   atomic.Uint64 // NEW_VMGENID uevents seen
+	restores     atomic.Uint64 // restores handled (uevents and Restored calls)
+	sandboxID    string        // guarded by mu
 
 	ctx    context.Context
 	cancel context.CancelFunc

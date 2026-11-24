@@ -37,7 +37,7 @@ class PoolStatsResponse(_message.Message):
     def __init__(self, pools: _Optional[_Iterable[_Union[PoolStat, _Mapping]]] = ...) -> None: ...
 
 class Sandbox(_message.Message):
-    __slots__ = ("id", "template", "template_id", "parent", "state", "created_at_unix_ms", "ttl_s", "pid", "timings", "pager")
+    __slots__ = ("id", "template", "template_id", "parent", "state", "created_at_unix_ms", "ttl_s", "pid", "timings", "pager", "limits", "error")
     ID_FIELD_NUMBER: _ClassVar[int]
     TEMPLATE_FIELD_NUMBER: _ClassVar[int]
     TEMPLATE_ID_FIELD_NUMBER: _ClassVar[int]
@@ -48,6 +48,8 @@ class Sandbox(_message.Message):
     PID_FIELD_NUMBER: _ClassVar[int]
     TIMINGS_FIELD_NUMBER: _ClassVar[int]
     PAGER_FIELD_NUMBER: _ClassVar[int]
+    LIMITS_FIELD_NUMBER: _ClassVar[int]
+    ERROR_FIELD_NUMBER: _ClassVar[int]
     id: str
     template: str
     template_id: str
@@ -58,7 +60,9 @@ class Sandbox(_message.Message):
     pid: int
     timings: CreateTimings
     pager: PagerStats
-    def __init__(self, id: _Optional[str] = ..., template: _Optional[str] = ..., template_id: _Optional[str] = ..., parent: _Optional[str] = ..., state: _Optional[str] = ..., created_at_unix_ms: _Optional[int] = ..., ttl_s: _Optional[int] = ..., pid: _Optional[int] = ..., timings: _Optional[_Union[CreateTimings, _Mapping]] = ..., pager: _Optional[_Union[PagerStats, _Mapping]] = ...) -> None: ...
+    limits: Limits
+    error: str
+    def __init__(self, id: _Optional[str] = ..., template: _Optional[str] = ..., template_id: _Optional[str] = ..., parent: _Optional[str] = ..., state: _Optional[str] = ..., created_at_unix_ms: _Optional[int] = ..., ttl_s: _Optional[int] = ..., pid: _Optional[int] = ..., timings: _Optional[_Union[CreateTimings, _Mapping]] = ..., pager: _Optional[_Union[PagerStats, _Mapping]] = ..., limits: _Optional[_Union[Limits, _Mapping]] = ..., error: _Optional[str] = ...) -> None: ...
 
 class PagerStats(_message.Message):
     __slots__ = ("faults", "copied", "zeroed", "prefetched", "fault_p50_us", "fault_p99_us", "layers", "prefetch_ms")
@@ -99,12 +103,24 @@ class CreateTimings(_message.Message):
     def __init__(self, total_ms: _Optional[float] = ..., disk_ms: _Optional[float] = ..., restore_ms: _Optional[float] = ..., resume_ms: _Optional[float] = ..., agent_ms: _Optional[float] = ..., identity_ms: _Optional[float] = ..., from_pool: _Optional[bool] = ...) -> None: ...
 
 class CreateSandboxRequest(_message.Message):
-    __slots__ = ("template", "ttl_s")
+    __slots__ = ("template", "ttl_s", "limits")
     TEMPLATE_FIELD_NUMBER: _ClassVar[int]
     TTL_S_FIELD_NUMBER: _ClassVar[int]
+    LIMITS_FIELD_NUMBER: _ClassVar[int]
     template: str
     ttl_s: int
-    def __init__(self, template: _Optional[str] = ..., ttl_s: _Optional[int] = ...) -> None: ...
+    limits: Limits
+    def __init__(self, template: _Optional[str] = ..., ttl_s: _Optional[int] = ..., limits: _Optional[_Union[Limits, _Mapping]] = ...) -> None: ...
+
+class Limits(_message.Message):
+    __slots__ = ("cpus", "memory_mib", "pids_max")
+    CPUS_FIELD_NUMBER: _ClassVar[int]
+    MEMORY_MIB_FIELD_NUMBER: _ClassVar[int]
+    PIDS_MAX_FIELD_NUMBER: _ClassVar[int]
+    cpus: float
+    memory_mib: int
+    pids_max: int
+    def __init__(self, cpus: _Optional[float] = ..., memory_mib: _Optional[int] = ..., pids_max: _Optional[int] = ...) -> None: ...
 
 class GetSandboxRequest(_message.Message):
     __slots__ = ("id",)

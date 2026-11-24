@@ -414,14 +414,14 @@ func (c *Client) ReadFile(ctx context.Context, path string, w io.Writer) (*FileI
 // Restored tells a freshly restored guest who it is now: the agent reseeds
 // the kernel RNG with entropy, writes a new machine-id, sets the hostname
 // and steps the wall clock to the host's (sent as late as possible).
-func (c *Client) Restored(ctx context.Context, sandboxID, hostname string, entropy []byte) (*agentpb.RestoredResponse, error) {
+func (c *Client) Restored(ctx context.Context, sandboxID, hostname string, entropy []byte, pidsMax int) (*agentpb.RestoredResponse, error) {
 	conn, done, err := c.connect(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer done()
 	req := &agentpb.Request{Op: &agentpb.Request_Restored{Restored: &agentpb.RestoredRequest{
-		SandboxId: sandboxID, Hostname: hostname, Entropy: entropy,
+		SandboxId: sandboxID, Hostname: hostname, Entropy: entropy, PidsMax: uint32(pidsMax),
 		RealtimeUnixNano: time.Now().UnixNano(), // after connecting, to keep the step accurate
 	}}}
 	if err := agentwire.Write(conn, req); err != nil {

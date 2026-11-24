@@ -72,6 +72,7 @@ var migrations = []string{
 		UNIQUE (sandbox_id, name)
 	);`,
 	`ALTER TABLE sandboxes ADD COLUMN pager_pid INTEGER NOT NULL DEFAULT 0;`,
+	`ALTER TABLE sandboxes ADD COLUMN limits TEXT NOT NULL DEFAULT '';`,
 }
 
 // Open opens (creating if needed) the database at path and migrates it.
@@ -156,6 +157,8 @@ type Sandbox struct {
 	// PagerPid is the page server serving the VM's memory (uffd backend),
 	// or 0 when the kernel maps a memory file.
 	PagerPid int
+	// Limits is the sandbox's resource limits as JSON (sandbox.Limits).
+	Limits string
 }
 
 // Expired reports whether the sandbox's TTL has run out at now.
@@ -177,10 +180,10 @@ func (s *Store) InsertSandbox(ctx context.Context, sb *Sandbox) error {
 	}
 	sb.UpdatedAt = now
 	_, err := s.db.ExecContext(ctx, `INSERT INTO sandboxes
-		(id, template, template_name, parent, state, dir, jail, cgroup, vsock, pid, created_at, updated_at, ttl_s, error, base_layer, pager_pid)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		(id, template, template_name, parent, state, dir, jail, cgroup, vsock, pid, created_at, updated_at, ttl_s, error, base_layer, pager_pid, limits)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		sb.ID, sb.Template, sb.TemplateName, sb.Parent, sb.State, sb.Dir, sb.Jail, sb.Cgroup, sb.Vsock, sb.Pid,
-		sb.CreatedAt.UnixNano(), sb.UpdatedAt.UnixNano(), int64(sb.TTL/time.Second), sb.Error, sb.BaseLayer, sb.PagerPid)
+		sb.CreatedAt.UnixNano(), sb.UpdatedAt.UnixNano(), int64(sb.TTL/time.Second), sb.Error, sb.BaseLayer, sb.PagerPid, sb.Limits)
 	if err != nil && isConstraint(err) {
 		return fmt.Errorf("%w: %s", ErrExists, sb.ID)
 	}
@@ -231,7 +234,7 @@ func (s *Store) ListSandboxes(ctx context.Context) ([]*Sandbox, error) {
 	return scanSandboxes(rows)
 }
 
-const selectSandbox = `SELECT id, template, template_name, parent, state, dir, jail, cgroup, vsock, pid, created_at, updated_at, ttl_s, error, base_layer, pager_pid FROM sandboxes`
+const selectSandbox = `SELECT id, template, template_name, parent, state, dir, jail, cgroup, vsock, pid, created_at, updated_at, ttl_s, error, base_layer, pager_pid, limits FROM sandboxes`
 
 func scanSandboxes(rows *sql.Rows) ([]*Sandbox, error) {
 	defer rows.Close()
@@ -240,7 +243,7 @@ func scanSandboxes(rows *sql.Rows) ([]*Sandbox, error) {
 		var sb Sandbox
 		var created, updated, ttl int64
 		if err := rows.Scan(&sb.ID, &sb.Template, &sb.TemplateName, &sb.Parent, &sb.State, &sb.Dir, &sb.Jail, &sb.Cgroup,
-			&sb.Vsock, &sb.Pid, &created, &updated, &ttl, &sb.Error, &sb.BaseLayer, &sb.PagerPid); err != nil {
+			&sb.Vsock, &sb.Pid, &created, &updated, &ttl, &sb.Error, &sb.BaseLayer, &sb.PagerPid, &sb.Limits); err != nil {
 			return nil, err
 		}
 		sb.CreatedAt, sb.UpdatedAt = time.Unix(0, created), time.Unix(0, updated)

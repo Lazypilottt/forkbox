@@ -180,6 +180,9 @@ func (m *Manager) warmOne(ctx context.Context, p *pools, name string) {
 }
 
 func (m *Manager) prepareWarm(ctx context.Context, name string, p *pools) (string, error) {
+	if err := m.checkDensity(1); err != nil {
+		return "", err
+	}
 	tpl, err := template.Get(m.DataDir, name)
 	if err != nil {
 		return "", err

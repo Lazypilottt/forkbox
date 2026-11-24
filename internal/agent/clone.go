@@ -85,6 +85,13 @@ func (s *Server) restored(c net.Conn, r *agentpb.RestoredRequest) error {
 	if err := s.bumpGeneration(); err != nil {
 		act("generation file: %v", err)
 	}
+	if r.PidsMax > 0 {
+		if err := s.setPidsMax(int(r.PidsMax)); err != nil {
+			act("process limit: %v", err)
+		} else {
+			act("exec processes limited to %d", r.PidsMax)
+		}
+	}
 	resp.Generation = s.generation.Load()
 	s.Log.Printf("restored as %s: %s", r.SandboxId, strings.Join(resp.Actions, "; "))
 	return agentwire.Write(c, &agentpb.Response{Msg: &agentpb.Response_Restored{Restored: resp}})

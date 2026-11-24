@@ -33,6 +33,7 @@ class FakeForkbox(pbg.ForkboxServicer):
         self.files: dict[tuple[str, str], bytes] = {}
         self.checkpoints: dict[tuple[str, str], pb.Checkpoint] = {}
         self.n = 0
+        self.max_sandboxes = 0
         self.lock = threading.Lock()
         self.last_pids: list[int] = []
 
@@ -49,11 +50,17 @@ class FakeForkbox(pbg.ForkboxServicer):
             context.abort(grpc.StatusCode.INVALID_ARGUMENT, "template is required")
         if request.template != "python":
             context.abort(grpc.StatusCode.NOT_FOUND, f"template not found: {request.template!r}")
+        if request.HasField("limits") and 0 < request.limits.memory_mib < 576:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, "memory 100 MiB: at least the guest's 512 MiB plus 64 MiB")
         with self.lock:
+            if self.max_sandboxes and len(self.sandboxes) >= self.max_sandboxes:
+                context.abort(grpc.StatusCode.RESOURCE_EXHAUSTED, "the host is at its sandbox density limit")
             self.n += 1
             sid = f"sb-{self.n}"
         sb = pb.Sandbox(id=sid, template="python", template_id="tpl-x", state="running", pid=4000 + self.n,
                         created_at_unix_ms=int(time.time() * 1000), ttl_s=request.ttl_s)
+        if request.HasField("limits"):
+            sb.limits.CopyFrom(request.limits)
         self.sandboxes[sid] = sb
         out = pb.Sandbox()
         out.CopyFrom(sb)
