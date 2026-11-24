@@ -89,7 +89,7 @@ type Handler struct {
 	regions []Region
 	chain   *Chain
 	removed map[uint64]bool // guest pages (by offset) released by the balloon
-	huge    []byte          // scratch for assembling a 2 MiB page
+	huge    []byte          // Serve's scratch for assembling a 2 MiB page (Prefetch has its own)
 	zero    []byte          // a zero 2 MiB page (hugetlbfs has no UFFDIO_ZEROPAGE)
 	Stats   Stats
 }
@@ -121,13 +121,14 @@ func NewHandler(uffd int, regions []Region, chain *Chain) (*Handler, error) {
 }
 
 // hugePage assembles the 2 MiB page at file offset off from the chain's
-// 4 KiB pages (diff layers are 4 KiB-granular even for hugepage memory).
-// nil means every part is zero.
-func (h *Handler) hugePage(off uint64) []byte {
+// 4 KiB pages (diff layers are 4 KiB-granular even for hugepage memory)
+// into buf. nil means every part is zero. Serve and Prefetch run at the
+// same time, so each passes its own buf.
+func (h *Handler) hugePage(buf []byte, off uint64) []byte {
 	first := int64(off / PageSize)
 	any := false
 	for i := range int64(HugePageSize / PageSize) {
-		dst := h.huge[i*PageSize : (i+1)*PageSize]
+		dst := buf[i*PageSize : (i+1)*PageSize]
 		if src := h.chain.Page(first + i); src != nil {
 			copy(dst, src)
 			any = true
@@ -138,7 +139,7 @@ func (h *Handler) hugePage(off uint64) []byte {
 	if !any {
 		return nil
 	}
-	return h.huge
+	return buf
 }
 
 // Prefetch copies the pages of the newest layer (what the parent touched
@@ -148,6 +149,7 @@ func (h *Handler) Prefetch() error {
 	for _, r := range h.regions {
 		first := int64(r.Offset / PageSize)
 		if r.PageSize == HugePageSize {
+			buf := make([]byte, HugePageSize)
 			per := int64(HugePageSize / PageSize)
 			for hp := first; hp < first+int64(r.Size/PageSize); hp += per {
 				touched := false
@@ -158,7 +160,7 @@ func (h *Handler) Prefetch() error {
 					continue
 				}
 				addr := r.BaseHostVirtAddr + uint64(hp-first)*PageSize
-				ok, err := h.copyPageSize(addr, h.hugePage(uint64(hp)*PageSize), HugePageSize)
+				ok, err := h.copyPageSize(addr, h.hugePage(buf, uint64(hp)*PageSize), HugePageSize)
 				if err != nil {
 					return err
 				}
@@ -292,7 +294,7 @@ func (h *Handler) serve(addr uint64) (bool, error) {
 	if ps == HugePageSize {
 		var data []byte
 		if !h.removed[off] {
-			data = h.hugePage(off)
+			data = h.hugePage(h.huge, off)
 		}
 		return h.copyPageSize(page, data, HugePageSize)
 	}

@@ -985,7 +985,13 @@ named here. Numbers are from 2–4 vCPU nested-virtualization CI runners.
   (EOI flag, steal time, pvclock) that cannot always wait for a userfault.
   Those pages are the ones the parent's KVM kept writing, so they are in
   the newest layer: the page server now prefetches it and the VM resumes
-  only after that (on by default, `--prefetch=false` to turn off).
+  only after that (on by default, `--prefetch=false` to turn off). In the
+  first run with it (45454460669, AMD runners) the uffd clone suite passed
+  in both jobs.
+- **Bug found by that run:** with prefetch on, a hugepage child's guest
+  panicked executing zeros. Serve and Prefetch run at the same time and
+  shared the 2 MiB scratch buffer that assembles a huge page; each now has
+  its own.
 
 ### Task 13. `race`, async SDK, warm pools
 
