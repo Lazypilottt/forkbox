@@ -6,7 +6,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -56,22 +55,26 @@ func startDaemon(t *testing.T) *daemon {
 		t.Fatal(err)
 	}
 	sock := filepath.Join(d.data, RunDir, GRPCSocket)
-	deadline := time.Now().Add(10 * time.Second)
-	for {
-		if c, err := net.Dial("unix", sock); err == nil {
-			c.Close()
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("daemon did not come up; log:\n%s", readLog(logPath))
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
 	d.cc, err = grpc.NewClient("unix://"+sock, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatal(err)
 	}
 	d.c = pb.NewForkboxClient(d.cc)
+	// Ready once it answers: a killed daemon's socket file outlives it, and
+	// recovery after a crash (freeing half-made children) takes a while.
+	deadline := time.Now().Add(60 * time.Second)
+	for {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		_, err := d.c.ListSandboxes(ctx, &pb.ListSandboxesRequest{})
+		cancel()
+		if err == nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("daemon did not come up (%v); log:\n%s", err, readLog(logPath))
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
 	return d
 }
 

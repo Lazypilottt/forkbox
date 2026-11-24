@@ -992,6 +992,9 @@ named here. Numbers are from 2–4 vCPU nested-virtualization CI runners.
   panicked executing zeros. Serve and Prefetch run at the same time and
   shared the 2 MiB scratch buffer that assembles a huge page; each now has
   its own.
+- Run 45457177555 (AMD, dmthin): the uffd clone suite passed again; the
+  daemon chaos test's helper took a socket that accepted a connection for
+  a daemon that was still recovering, so it now waits for a gRPC answer.
 
 ### Task 13. `race`, async SDK, warm pools
 
