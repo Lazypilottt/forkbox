@@ -42,6 +42,10 @@ type StatsFile struct {
 	PrefetchMs   float64 `json:"prefetch_ms"`
 	FirecrackerP int     `json:"firecracker_pid"`
 	Exit         string  `json:"exit,omitempty"`
+	// LastFaultAgoMs is how long ago the last fault was served, at the time
+	// of writing; Deferred counts faults waiting for a retry.
+	LastFaultAgoMs float64 `json:"last_fault_ago_ms"`
+	Deferred       int64   `json:"deferred"`
 }
 
 // Run serves one VM: it listens, waits for Firecracker's handshake, and
@@ -107,6 +111,10 @@ func Run(o Options) (err error) {
 		}
 		st.Faults, st.Copied, st.Zeroed = h.Stats.Faults.Load(), h.Stats.Copied.Load(), h.Stats.Zeroed.Load()
 		st.Prefetched, st.Removed, st.Retries = h.Stats.Prefetched.Load(), h.Stats.Removed.Load(), h.Stats.Retries.Load()
+		st.Deferred = h.Stats.Deferred.Load()
+		if last := h.Stats.LastFault.Load(); last > 0 {
+			st.LastFaultAgoMs = float64(time.Now().UnixNano()-last) / 1e6
+		}
 		lat := h.Stats.FaultLatencies()
 		if len(lat) > 0 {
 			st.FaultP50us = float64(lat[len(lat)/2].Nanoseconds()) / 1000

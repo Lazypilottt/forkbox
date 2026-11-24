@@ -258,22 +258,7 @@ func (m *Manager) finishRestore(ctx context.Context, c *Created, v *vm.VM) error
 	defer cancel()
 	pong, err := ac.WaitReady(actx)
 	if err != nil {
-		err = fmt.Errorf("agent did not answer within %s: %w", at, err)
-		if st, serr := m.PagerStats(rec.ID); serr == nil && st != nil {
-			err = fmt.Errorf("%w (page server: %v)", err, st)
-		}
-		if !m.VMs.Alive(rec.Pid, rec.ID) {
-			err = fmt.Errorf("%w; Firecracker (pid %d) has exited", err, rec.Pid)
-		} else {
-			err = fmt.Errorf("%w; Firecracker threads: %s", err, threadStates(v.Pid()))
-			if rec.PagerPid != 0 {
-				err = fmt.Errorf("%w; page server threads: %s", err, threadStates(rec.PagerPid))
-			}
-		}
-		if tail := vm.ConsoleTail(m.DataDir, rec.ID, 1500); tail != "" {
-			err = fmt.Errorf("%w\nconsole:\n%s", err, tail)
-		}
-		return err
+		return m.restoreDiag(fmt.Errorf("agent did not answer within %s: %w", at, err), rec, v)
 	}
 	c.Timings.Agent = time.Since(t)
 
@@ -284,11 +269,7 @@ func (m *Manager) finishRestore(ctx context.Context, c *Created, v *vm.VM) error
 	}
 	r, err := ac.Restored(actx, rec.ID, rec.ID, entropy, ParseLimits(rec.Limits).PidsMax)
 	if err != nil {
-		err = fmt.Errorf("agent restored: %w", err)
-		if !v.Alive() {
-			err = fmt.Errorf("%w; Firecracker has exited\nconsole:\n%s", err, vm.ConsoleTail(m.DataDir, rec.ID, 1500))
-		}
-		return err
+		return m.restoreDiag(fmt.Errorf("agent restored: %w", err), rec, v)
 	}
 	c.Timings.Identity = time.Since(t)
 	c.Identity = &Identity{
@@ -299,6 +280,27 @@ func (m *Manager) finishRestore(ctx context.Context, c *Created, v *vm.VM) error
 	rec.Pid = v.Pid()
 	rec.State = store.StateRunning
 	return m.Store.SetState(ctx, rec.ID, store.StateRunning, rec.Pid, "")
+}
+
+// restoreDiag adds what tells why a restored VM stopped answering: the
+// page server's counters, whether Firecracker still runs and what each of
+// its (and the page server's) threads waits in, and the console's end.
+func (m *Manager) restoreDiag(err error, rec *store.Sandbox, v *vm.VM) error {
+	if st, serr := m.PagerStats(rec.ID); serr == nil && st != nil {
+		err = fmt.Errorf("%w (page server: %v)", err, st)
+	}
+	if !v.Alive() {
+		err = fmt.Errorf("%w; Firecracker has exited", err)
+	} else {
+		err = fmt.Errorf("%w; Firecracker threads: %s", err, threadStates(v.Pid()))
+		if rec.PagerPid != 0 {
+			err = fmt.Errorf("%w; page server threads: %s", err, threadStates(rec.PagerPid))
+		}
+	}
+	if tail := vm.ConsoleTail(m.DataDir, rec.ID, 1500); tail != "" {
+		err = fmt.Errorf("%w\nconsole:\n%s", err, tail)
+	}
+	return err
 }
 
 // whileAlive is ctx with timeout d, also canceled once v's Firecracker

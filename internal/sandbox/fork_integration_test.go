@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/Lazypilottt/forkbox/internal/vm/agentclient"
+	"github.com/Lazypilottt/forkbox/proto/agentpb"
 )
 
 const counterScript = `#!/bin/sh
@@ -29,10 +30,27 @@ func sh(t *testing.T, m *Manager, id, cmd string) string {
 	t.Helper()
 	// A deadline on the whole call: a VM that died must fail the test, not
 	// leave it retrying the connection forever.
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	ctx, cancel := vmCtx(m, id, 3*time.Minute)
 	defer cancel()
-	// A VM that exits (e.g. KVM_EXIT_FAIL_ENTRY on a nested host) fails the
-	// call within a second, not after the agent client's connect retries.
+	r, err := m.Agent(id).Run(ctx, agentclient.ExecRequest{Args: []string{"sh", "-c", cmd}, Timeout: 2 * time.Minute}, 0)
+	if err != nil {
+		alive := "alive"
+		if rec, gerr := m.Store.GetSandbox(context.Background(), id); gerr != nil || !m.VMs.Alive(rec.Pid, id) {
+			alive = "NOT running"
+		}
+		t.Fatalf("%s: %s: %v\nVM %s; console tail:\n%s", id, cmd, err, alive, consoleTail(m, id))
+	}
+	if r.Code != 0 {
+		t.Fatalf("%s: %s: exit %d: %s", id, cmd, r.Code, r.Stderr)
+	}
+	return strings.TrimSpace(string(r.Stdout))
+}
+
+// vmCtx is a context for agent calls to sandbox id: it ends after d, or
+// within a second of the VM exiting (e.g. KVM_EXIT_FAIL_ENTRY on a nested
+// host), rather than after the agent client's connect retries.
+func vmCtx(m *Manager, id string, d time.Duration) (context.Context, context.CancelFunc) {
+	ctx, cancel := context.WithTimeout(context.Background(), d)
 	go func() {
 		rec, err := m.Store.GetSandbox(ctx, id)
 		if err != nil {
@@ -46,18 +64,14 @@ func sh(t *testing.T, m *Manager, id, cmd string) string {
 			time.Sleep(time.Second)
 		}
 	}()
-	r, err := m.Agent(id).Run(ctx, agentclient.ExecRequest{Args: []string{"sh", "-c", cmd}, Timeout: 2 * time.Minute}, 0)
-	if err != nil {
-		alive := "alive"
-		if rec, gerr := m.Store.GetSandbox(context.Background(), id); gerr != nil || !m.VMs.Alive(rec.Pid, id) {
-			alive = "NOT running"
-		}
-		t.Fatalf("%s: %s: %v\nVM %s; console tail:\n%s", id, cmd, err, alive, consoleTail(m, id))
-	}
-	if r.Code != 0 {
-		t.Fatalf("%s: %s: exit %d: %s", id, cmd, r.Code, r.Stderr)
-	}
-	return strings.TrimSpace(string(r.Stdout))
+	return ctx, cancel
+}
+
+// agentInfo is the agent's Info for sandbox id, failing fast on a dead VM.
+func agentInfo(m *Manager, id string) (*agentpb.InfoResponse, error) {
+	ctx, cancel := vmCtx(m, id, time.Minute)
+	defer cancel()
+	return m.Agent(id).Info(ctx)
 }
 
 func counter(t *testing.T, m *Manager, id string) int {

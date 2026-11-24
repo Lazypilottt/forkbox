@@ -55,6 +55,8 @@ type Region struct {
 // Stats are a handler's counters.
 type Stats struct {
 	Faults     atomic.Uint64 // page fault events served
+	LastFault  atomic.Int64  // unix nanoseconds of the last fault served
+	Deferred   atomic.Int64  // faults waiting for a retry (EAGAIN)
 	Copied     atomic.Uint64 // pages copied from a layer
 	Zeroed     atomic.Uint64 // zero pages
 	Prefetched atomic.Uint64 // pages copied ahead of any fault
@@ -251,8 +253,10 @@ func (h *Handler) Serve(stop <-chan struct{}) error {
 				continue
 			}
 			h.Stats.Faults.Add(1)
+			h.Stats.LastFault.Store(time.Now().UnixNano())
 			h.Stats.record(time.Since(t))
 		}
+		h.Stats.Deferred.Store(int64(len(deferred)))
 	}
 }
 

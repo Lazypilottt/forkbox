@@ -238,7 +238,7 @@ func cloneSuite(t *testing.T, backend string) {
 			return h
 		})
 		unique(t, "agent sandbox id", kids, func(id string) string {
-			in, err := m.Agent(id).Info(ctx)
+			in, err := agentInfo(m, id)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -255,14 +255,14 @@ func cloneSuite(t *testing.T, backend string) {
 				t.Errorf("%s: boot_id %s, parent's %s", id, b, parentBoot)
 			}
 		}
-		in, _ := m.Agent(kids[0]).Info(ctx)
+		in, _ := agentInfo(m, kids[0])
 		t.Logf("VM generation ID changes seen by a child's agent: %d", in.Generation)
 	})
 
 	checkClocks := func(t *testing.T) {
 		parallel(all, func(id string) {
 			before := time.Now()
-			in, err := m.Agent(id).Info(ctx)
+			in, err := agentInfo(m, id)
 			after := time.Now()
 			if err != nil {
 				t.Errorf("%s: %v", id, err)

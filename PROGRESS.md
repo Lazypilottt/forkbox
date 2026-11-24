@@ -62,7 +62,9 @@ VMs at the same instant, while booted VMs run fine: a fault of nested
 snapshot restore on that CPU, not of Forkbox. CI now runs a canary first
 (`TestIntegrationHostCanary`: six restored sandboxes, exec for 20 s) that
 fails such a runner in about a minute with an `::error::` naming the CPU;
-re-running the job gets other hardware.
+re-running the job gets other hardware. The canary passed twice on 6975P
+runners that then lost VMs, and every 6975P run so far failed (5 of 5), so
+the CI step also refuses that CPU model outright.
 
 **Bug found through it (`3f858aa` run):** when a child died during a fork,
 the daemon's identity call (`Restored`) retried the dead VM's vsock socket
