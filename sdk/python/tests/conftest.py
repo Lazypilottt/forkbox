@@ -61,6 +61,10 @@ class FakeForkbox(pbg.ForkboxServicer):
                         created_at_unix_ms=int(time.time() * 1000), ttl_s=request.ttl_s)
         if request.HasField("limits"):
             sb.limits.CopyFrom(request.limits)
+        for e in request.egress:
+            if " " in e or not e:
+                context.abort(grpc.StatusCode.INVALID_ARGUMENT, f"invalid egress entry: {e!r}")
+        sb.egress.extend(sorted(set(request.egress)))
         self.sandboxes[sid] = sb
         out = pb.Sandbox()
         out.CopyFrom(sb)

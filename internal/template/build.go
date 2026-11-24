@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"syscall"
 	"time"
@@ -73,6 +74,14 @@ func (b *Builder) Build(ctx context.Context, specPath string, force bool) (t *Te
 	defer unlock()
 	if !force {
 		if t, err := Get(b.DataDir, id); err == nil {
+			if !slices.Equal(t.Spec.Egress, spec.Egress) {
+				// Policy only: record it without rebuilding.
+				t.Spec.Egress = spec.Egress
+				if err := writeJSONAtomic(filepath.Join(dir, MetaFile), t); err != nil {
+					return nil, false, err
+				}
+				fmt.Fprintf(logw, "template %s (%s): egress allow-list updated\n", spec.Name, id)
+			}
 			fmt.Fprintf(logw, "template %s (%s) is up to date\n", spec.Name, id)
 			return t, false, nil
 		}
@@ -369,7 +378,7 @@ func mkfs(ctx context.Context, root, img string, sizeMiB int, out io.Writer) err
 // commands through the agent, then pauses and takes the base snapshot.
 func (b *Builder) bootAndSnapshot(ctx context.Context, t *Template, staging string, out io.Writer) error {
 	id := "build-" + strings.TrimPrefix(t.ID, "tpl-")[:12]
-	if err := b.Net.Setup(ctx, id, -1); err != nil {
+	if err := b.Net.Setup(ctx, id, -1, netns.Policy{}); err != nil {
 		return err
 	}
 	defer b.Net.Teardown(context.WithoutCancel(ctx), id)
@@ -464,6 +473,23 @@ func lock(dataDir, id string) (func(), error) {
 		f.Close()
 		os.Remove(f.Name())
 	}, nil
+}
+
+// writeJSONAtomic replaces path, keeping its mode.
+func writeJSONAtomic(path string, v any) error {
+	fi, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+	tmp := path + ".tmp"
+	if err := writeJSON(tmp, v); err != nil {
+		return err
+	}
+	if err := os.Chmod(tmp, fi.Mode().Perm()); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	return os.Rename(tmp, path)
 }
 
 func writeJSON(path string, v any) error {

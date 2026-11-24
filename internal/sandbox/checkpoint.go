@@ -165,17 +165,26 @@ func (m *Manager) RestoreAsNew(ctx context.Context, sandboxID, nameOrID string, 
 	if err := m.checkDensity(1); err != nil {
 		return nil, err
 	}
+	egress, err := egressFor(tpl, nil)
+	if err != nil {
+		return nil, err
+	}
+	seed := ""
+	if src, err := m.Store.GetSandbox(ctx, cp.SandboxID); err == nil {
+		egress, seed = src.Egress, src.ID
+	}
 	start := time.Now()
 	nid := IDPrefix + randHex(6)
 	rec := &store.Sandbox{
 		ID: nid, Template: cp.Template, TemplateName: cp.TemplateName, Parent: cp.SandboxID,
 		State: store.StateCreating, Dir: Dir(m.DataDir, nid), Jail: vm.JailDir(m.DataDir, nid),
 		Cgroup: m.VMs.CgroupPath(nid), Vsock: vm.VsockSocketPath(m.DataDir, nid), TTL: ttl, BaseLayer: cp.Layer,
+		Egress: egress,
 	}
 	if err := m.Store.InsertSandbox(ctx, rec); err != nil {
 		return nil, err
 	}
-	c := &Created{Sandbox: rec}
+	c := &Created{Sandbox: rec, seedFrom: seed}
 	err = func() error {
 		if err := os.MkdirAll(rec.Dir, 0o700); err != nil {
 			return err

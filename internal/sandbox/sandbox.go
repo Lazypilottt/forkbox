@@ -67,6 +67,8 @@ type Manager struct {
 	reaped    reapCounters
 	// entryRetries counts restores retried after KVM_EXIT_FAIL_ENTRY.
 	entryRetries atomic.Uint64
+	blockedConns atomic.Uint64
+	blockedSeen  map[string]map[string]bool // guarded by mu: logged blocked destinations
 }
 
 // New returns a manager.
@@ -84,6 +86,9 @@ type CreateOptions struct {
 	TTL      time.Duration // 0: lives until destroyed
 	ID       string        // optional; generated when empty
 	Limits   Limits
+	// Egress adds to the template's egress allow-list (domains, IPv4
+	// addresses or CIDRs, or "*").
+	Egress []string
 }
 
 // Timings of one Create, for benchmarks.
@@ -98,7 +103,8 @@ type Created struct {
 	Identity *Identity
 	FromPool bool // handed out from a warm pool
 
-	warm bool // stop after the restore, paused (filling a warm pool)
+	warm     bool   // stop after the restore, paused (filling a warm pool)
+	seedFrom string // a fork's parent: copy the addresses its DNS allowed
 }
 
 // Identity is what the agent did to make the clone unique.
@@ -133,8 +139,12 @@ func (m *Manager) Create(ctx context.Context, o CreateOptions) (*Created, error)
 	if err := o.Limits.validate(tpl.MemMiB); err != nil {
 		return nil, err
 	}
+	pol, err := egressFor(tpl, o.Egress)
+	if err != nil {
+		return nil, err
+	}
 	// Pool sandboxes already count against the density limit.
-	if o.ID == "" && o.Limits == (Limits{}) {
+	if o.ID == "" && o.Limits == (Limits{}) && len(o.Egress) == 0 {
 		if c, ok := m.fromPool(ctx, tpl, o.TTL); ok {
 			c.Timings.Total = time.Since(start)
 			return c, nil
@@ -155,7 +165,7 @@ func (m *Manager) Create(ctx context.Context, o CreateOptions) (*Created, error)
 	rec := &store.Sandbox{
 		ID: id, Template: tpl.ID, TemplateName: tpl.Name, State: store.StateCreating, Dir: dir, BaseLayer: tpl.ID,
 		Jail: vm.JailDir(m.DataDir, id), Cgroup: m.VMs.CgroupPath(id),
-		Vsock: vm.VsockSocketPath(m.DataDir, id), TTL: o.TTL, Limits: o.Limits.encode(),
+		Vsock: vm.VsockSocketPath(m.DataDir, id), TTL: o.TTL, Limits: o.Limits.encode(), Egress: pol,
 	}
 	if err := m.checkDensity(1); err != nil {
 		return nil, err
@@ -207,7 +217,16 @@ func (m *Manager) restoreInto(ctx context.Context, c *Created, snapDir string, m
 	if err != nil {
 		return err
 	}
-	if err := m.Net.Setup(ctx, rec.ID, slot); err != nil {
+	pol, _ := netns.ParsePolicy(splitEgress(rec.Egress)) // validated when recorded
+	if err := m.Net.Setup(ctx, rec.ID, slot, pol); err != nil {
+		return err
+	}
+	if c.seedFrom != "" {
+		if err := m.Net.CopyAllowed(ctx, c.seedFrom, rec.ID); err != nil {
+			m.Log.Printf("egress: %s: copying allowed addresses from %s: %v", rec.ID, c.seedFrom, err)
+		}
+	}
+	if err := m.Net.StartDNS(rec.ID, pol); err != nil {
 		return err
 	}
 	c.Timings.Network = time.Since(t)
@@ -377,6 +396,11 @@ func (m *Manager) Recover(ctx context.Context) (*RecoverReport, error) {
 			rep.Adopted = append(rep.Adopted, r.ID)
 			if r.PagerPid != 0 {
 				m.watchAdoptedPager(r.ID, r.PagerPid)
+			}
+			// The DNS proxy lived in the previous daemon.
+			pol, _ := netns.ParsePolicy(splitEgress(r.Egress))
+			if err := m.Net.StartDNS(r.ID, pol); err != nil {
+				errs = append(errs, err)
 			}
 			// A daemon killed mid-fork or mid-checkpoint can leave the
 			// parent paused, and its diff half-written.

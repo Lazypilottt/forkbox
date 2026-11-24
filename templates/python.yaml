@@ -16,6 +16,8 @@ warm_up:
   # Import numpy once so its shared libraries and bytecode are in memory
   # when the base snapshot is taken.
   - python -c "import numpy; numpy.ones(1000).sum(); import pytest"
+# Egress is denied by default; sandboxes of this template may reach PyPI.
+egress: [pypi.org, pythonhosted.org]
 vcpus: 2
 memory_mib: 512
 disk_size_mib: 2048

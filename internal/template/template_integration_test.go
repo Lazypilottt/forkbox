@@ -82,7 +82,7 @@ func TestIntegrationBuildTiny(t *testing.T) {
 	t.Cleanup(func() { os.Remove(disk) })
 	// The snapshot has the guest's network device, so the restored VM needs
 	// a namespace with the tap (no uplink is needed here).
-	must(t, nm.Setup(ctx, "tiny-restore", -1))
+	must(t, nm.Setup(ctx, "tiny-restore", -1, netns.Policy{}))
 	t.Cleanup(func() { nm.Teardown(context.Background(), "tiny-restore") })
 	sb, err := m.Restore(ctx, tpl.SnapshotDir(), vm.MemBackend{Kind: vm.MemFile},
 		vm.Config{ID: "tiny-restore", Rootfs: vm.Drive{Path: disk}, NetNS: netns.Path("tiny-restore")})

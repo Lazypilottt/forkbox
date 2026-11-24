@@ -199,6 +199,9 @@ func (m *Manager) prepareWarm(ctx context.Context, name string, p *pools) (strin
 		ID: id, Template: tpl.ID, TemplateName: tpl.Name, State: store.StateCreating, Dir: Dir(m.DataDir, id), BaseLayer: tpl.ID,
 		Jail: vm.JailDir(m.DataDir, id), Cgroup: m.VMs.CgroupPath(id), Vsock: vm.VsockSocketPath(m.DataDir, id),
 	}
+	if rec.Egress, err = egressFor(tpl, nil); err != nil {
+		return "", err
+	}
 	if err := m.Store.InsertSandbox(ctx, rec); err != nil {
 		return "", err
 	}

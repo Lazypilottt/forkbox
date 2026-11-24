@@ -228,6 +228,7 @@ type Sandbox struct {
 	Pager           *PagerStats            `protobuf:"bytes,10,opt,name=pager,proto3" json:"pager,omitempty"`           // uffd-backed sandboxes, in GetSandbox
 	Limits          *Limits                `protobuf:"bytes,11,opt,name=limits,proto3" json:"limits,omitempty"`         // unset: none
 	Error           string                 `protobuf:"bytes,12,opt,name=error,proto3" json:"error,omitempty"`           // why it failed (state failed)
+	Egress          []string               `protobuf:"bytes,13,rep,name=egress,proto3" json:"egress,omitempty"`         // the egress allow-list in force
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -344,6 +345,13 @@ func (x *Sandbox) GetError() string {
 		return x.Error
 	}
 	return ""
+}
+
+func (x *Sandbox) GetEgress() []string {
+	if x != nil {
+		return x.Egress
+	}
+	return nil
 }
 
 // The page server's counters for a sandbox whose memory is served from a
@@ -541,10 +549,14 @@ func (x *CreateTimings) GetFromPool() bool {
 }
 
 type CreateSandboxRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Template      string                 `protobuf:"bytes,1,opt,name=template,proto3" json:"template,omitempty"` // name or id
-	TtlS          uint64                 `protobuf:"varint,2,opt,name=ttl_s,json=ttlS,proto3" json:"ttl_s,omitempty"`
-	Limits        *Limits                `protobuf:"bytes,3,opt,name=limits,proto3" json:"limits,omitempty"` // unset: the template's VM size, no extra caps
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Template string                 `protobuf:"bytes,1,opt,name=template,proto3" json:"template,omitempty"` // name or id
+	TtlS     uint64                 `protobuf:"varint,2,opt,name=ttl_s,json=ttlS,proto3" json:"ttl_s,omitempty"`
+	Limits   *Limits                `protobuf:"bytes,3,opt,name=limits,proto3" json:"limits,omitempty"` // unset: the template's VM size, no extra caps
+	// Added to the template's egress allow-list: domains (a name allows its
+	// subdomains), IPv4 addresses or CIDRs, or "*" for anything. Egress is
+	// denied by default.
+	Egress        []string `protobuf:"bytes,4,rep,name=egress,proto3" json:"egress,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -596,6 +608,13 @@ func (x *CreateSandboxRequest) GetTtlS() uint64 {
 func (x *CreateSandboxRequest) GetLimits() *Limits {
 	if x != nil {
 		return x.Limits
+	}
+	return nil
+}
+
+func (x *CreateSandboxRequest) GetEgress() []string {
+	if x != nil {
+		return x.Egress
 	}
 	return nil
 }
@@ -2321,7 +2340,7 @@ const file_forkbox_proto_rawDesc = "" +
 	"\n" +
 	"last_error\x18\b \x01(\tR\tlastError\"?\n" +
 	"\x11PoolStatsResponse\x12*\n" +
-	"\x05pools\x18\x01 \x03(\v2\x14.forkbox.v1.PoolStatR\x05pools\"\xfd\x02\n" +
+	"\x05pools\x18\x01 \x03(\v2\x14.forkbox.v1.PoolStatR\x05pools\"\x95\x03\n" +
 	"\aSandbox\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1a\n" +
 	"\btemplate\x18\x02 \x01(\tR\btemplate\x12\x1f\n" +
@@ -2336,7 +2355,8 @@ const file_forkbox_proto_rawDesc = "" +
 	"\x05pager\x18\n" +
 	" \x01(\v2\x16.forkbox.v1.PagerStatsR\x05pager\x12*\n" +
 	"\x06limits\x18\v \x01(\v2\x12.forkbox.v1.LimitsR\x06limits\x12\x14\n" +
-	"\x05error\x18\f \x01(\tR\x05error\"\xf1\x01\n" +
+	"\x05error\x18\f \x01(\tR\x05error\x12\x16\n" +
+	"\x06egress\x18\r \x03(\tR\x06egress\"\xf1\x01\n" +
 	"\n" +
 	"PagerStats\x12\x16\n" +
 	"\x06faults\x18\x01 \x01(\x04R\x06faults\x12\x16\n" +
@@ -2361,11 +2381,12 @@ const file_forkbox_proto_rawDesc = "" +
 	"\bagent_ms\x18\x05 \x01(\x01R\aagentMs\x12\x1f\n" +
 	"\videntity_ms\x18\x06 \x01(\x01R\n" +
 	"identityMs\x12\x1b\n" +
-	"\tfrom_pool\x18\a \x01(\bR\bfromPool\"s\n" +
+	"\tfrom_pool\x18\a \x01(\bR\bfromPool\"\x8b\x01\n" +
 	"\x14CreateSandboxRequest\x12\x1a\n" +
 	"\btemplate\x18\x01 \x01(\tR\btemplate\x12\x13\n" +
 	"\x05ttl_s\x18\x02 \x01(\x04R\x04ttlS\x12*\n" +
-	"\x06limits\x18\x03 \x01(\v2\x12.forkbox.v1.LimitsR\x06limits\"V\n" +
+	"\x06limits\x18\x03 \x01(\v2\x12.forkbox.v1.LimitsR\x06limits\x12\x16\n" +
+	"\x06egress\x18\x04 \x03(\tR\x06egress\"V\n" +
 	"\x06Limits\x12\x12\n" +
 	"\x04cpus\x18\x01 \x01(\x01R\x04cpus\x12\x1d\n" +
 	"\n" +

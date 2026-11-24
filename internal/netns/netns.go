@@ -25,6 +25,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 // The guest side, identical in every namespace and baked into templates.
@@ -48,6 +49,9 @@ const (
 // Runner runs a command; tests replace it.
 type Runner func(ctx context.Context, stdin string, name string, args ...string) error
 
+// Outputter runs a command and returns its standard output; tests replace it.
+type Outputter func(ctx context.Context, name string, args ...string) ([]byte, error)
+
 // Manager creates and removes sandbox namespaces.
 type Manager struct {
 	Pool netip.Prefix
@@ -56,6 +60,13 @@ type Manager struct {
 	// UID and GID own the tap, so the jailed Firecracker can open it.
 	UID, GID int
 	Run      Runner
+	Output   Outputter
+	// Logf logs egress events (refused names); default: discard.
+	Logf func(format string, a ...any)
+
+	mu      sync.Mutex
+	proxies map[string]*dnsProxy // by sandbox id
+	stats   EgressStats
 }
 
 // New returns a manager for pool (DefaultPool when empty).
@@ -67,7 +78,7 @@ func New(pool string, uid, gid int) (*Manager, error) {
 	if err != nil || !p.Addr().Is4() || p.Bits() > 29 {
 		return nil, fmt.Errorf("address pool %q: need an IPv4 prefix of /29 or larger", pool)
 	}
-	return &Manager{Pool: p.Masked(), DNS: UpstreamDNS(), UID: uid, GID: gid, Run: run}, nil
+	return &Manager{Pool: p.Masked(), DNS: UpstreamDNS(), UID: uid, GID: gid, Run: run, Output: output}, nil
 }
 
 // Slots is how many sandboxes the pool can hold.
@@ -98,10 +109,11 @@ func Path(id string) string { return filepath.Join(NetnsDir, Name(id)) }
 func HostVeth(slot int) string { return Prefix + "h" + strconv.Itoa(slot) }
 
 // Setup creates the namespace for id. With uplink (slot >= 0) it is
-// connected to the host; without (slot < 0, used for template builds) it
-// holds only the tap. Setup first removes anything left from an earlier
-// attempt, so it is idempotent.
-func (m *Manager) Setup(ctx context.Context, id string, slot int) error {
+// connected to the host, with egress limited to policy (see StartDNS);
+// without (slot < 0, used for template builds) it holds only the tap.
+// Setup first removes anything left from an earlier attempt, so it is
+// idempotent.
+func (m *Manager) Setup(ctx context.Context, id string, slot int, policy Policy) error {
 	if err := m.Teardown(ctx, id); err != nil {
 		return err
 	}
@@ -135,7 +147,9 @@ func (m *Manager) Setup(ctx context.Context, id string, slot int) error {
 			func() error {
 				return m.Run(ctx, "", "ip", "netns", "exec", ns, "sysctl", "-qw", "net.ipv4.ip_forward=1")
 			},
-			func() error { return m.Run(ctx, m.nsRuleset(nsAddr), "ip", "netns", "exec", ns, "nft", "-f", "-") },
+			func() error {
+				return m.Run(ctx, m.nsRuleset(nsAddr, policy), "ip", "netns", "exec", ns, "nft", "-f", "-")
+			},
 		)
 	}
 	for _, s := range steps {
@@ -147,36 +161,55 @@ func (m *Manager) Setup(ctx context.Context, id string, slot int) error {
 }
 
 // nsRuleset is the namespace's nftables ruleset:
-//   - the guest's DNS (to TapIP) goes to the upstream resolver;
 //   - TCP from the host to the namespace address goes to the guest (port
 //     forwards);
 //   - the guest's traffic leaves with the namespace's unique address;
-//   - egress allows DNS, HTTP and HTTPS and ping, and never reaches link-local
-//     addresses (cloud metadata) or other sandboxes. Deny-by-default
-//     allow-lists come in Task 14.
-func (m *Manager) nsRuleset(nsAddr netip.Addr) string {
+//   - egress is denied by default. The guest reaches the policy's networks
+//     (allow4) and the addresses allowed names resolved to (dyn4, filled by
+//     the DNS proxy on TapIP:53), never link-local addresses (cloud
+//     metadata) or other sandboxes. Refused TCP and UDP destinations are
+//     recorded in the blocked set for the log.
+func (m *Manager) nsRuleset(nsAddr netip.Addr, p Policy) string {
+	allow := ""
+	if len(p.Nets) > 0 {
+		var nets []string
+		for _, n := range p.Nets {
+			nets = append(nets, n.String())
+		}
+		allow = "elements = { " + strings.Join(nets, ", ") + " }; "
+	}
+	open := ""
+	if p.Open {
+		open = fmt.Sprintf("iifname %q accept\n\t\t", TapName)
+	}
 	return fmt.Sprintf(`table ip fbx {
+	set allow4 { type ipv4_addr; flags interval; %[9]s}
+	set dyn4 { type ipv4_addr; flags timeout; }
+	set blocked { type ipv4_addr . inet_proto . inet_service; flags dynamic, timeout; timeout 10m; size 4096; }
 	chain prerouting {
 		type nat hook prerouting priority dstnat; policy accept;
-		iifname "%[1]s" ip daddr %[2]s udp dport 53 dnat to %[3]s
-		iifname "%[1]s" ip daddr %[2]s tcp dport 53 dnat to %[3]s
 		iifname "%[4]s" ip daddr %[5]s meta l4proto tcp dnat to %[6]s
 	}
 	chain postrouting {
 		type nat hook postrouting priority srcnat; policy accept;
 		oifname "%[4]s" ip saddr %[2]s/%[7]d masquerade
 	}
+	chain input {
+		type filter hook input priority filter; policy accept;
+		iifname "%[1]s" ip daddr %[2]s meta l4proto { tcp, udp } th dport 53 accept
+		iifname "%[1]s" drop
+	}
 	chain forward {
 		type filter hook forward priority filter; policy drop;
 		ct state established,related accept
 		iifname "%[4]s" oifname "%[1]s" ct status dnat accept
 		iifname "%[1]s" ip daddr { 169.254.0.0/16, %[8]s } drop
-		iifname "%[1]s" udp dport 53 accept
-		iifname "%[1]s" tcp dport { 53, 80, 443 } accept
-		iifname "%[1]s" icmp type echo-request accept
+		%[10]siifname "%[1]s" ip daddr @allow4 accept
+		iifname "%[1]s" ip daddr @dyn4 accept
+		iifname "%[1]s" meta l4proto { tcp, udp } add @blocked { ip daddr . meta l4proto . th dport } drop
 	}
 }
-`, TapName, TapIP, m.DNS, NsVeth, nsAddr, GuestIP, PrefixLen, m.Pool)
+`, TapName, TapIP, "", NsVeth, nsAddr, GuestIP, PrefixLen, m.Pool, allow, open)
 }
 
 // HostRuleset is the host's own table: it masquerades the pool out of the
@@ -211,6 +244,7 @@ func (m *Manager) EnsureHost(ctx context.Context) error {
 // Teardown removes a sandbox's namespace; its veth pair goes with it. A
 // missing namespace is fine.
 func (m *Manager) Teardown(ctx context.Context, id string) error {
+	m.StopDNS(id)
 	if _, err := os.Stat(Path(id)); errors.Is(err, os.ErrNotExist) {
 		return nil
 	}
@@ -274,6 +308,17 @@ func firstNameserver(path string) (netip.Addr, bool) {
 		}
 	}
 	return netip.Addr{}, false
+}
+
+func output(ctx context.Context, name string, args ...string) ([]byte, error) {
+	var stderr bytes.Buffer
+	cmd := exec.CommandContext(ctx, name, args...)
+	cmd.Stderr = &stderr
+	out, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("%s %s: %w: %s", name, strings.Join(args, " "), err, bytes.TrimSpace(stderr.Bytes()))
+	}
+	return out, nil
 }
 
 func run(ctx context.Context, stdin, name string, args ...string) error {

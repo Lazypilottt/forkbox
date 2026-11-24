@@ -39,6 +39,14 @@ def test_create_with_limits(daemon):
         Sandbox.create("python", memory_mib=100)
 
 
+def test_create_with_egress(daemon):
+    sb = Sandbox.create("python", egress=["pypi.org", "10.0.0.0/8"])
+    assert sb.egress == ("10.0.0.0/8", "pypi.org")
+    assert Sandbox.create("python", egress="example.com").egress == ("example.com",)
+    with pytest.raises(InvalidArgumentError):
+        Sandbox.create("python", egress=["not a domain"])
+
+
 def test_density_limit_fails_fast(daemon):
     daemon.max_sandboxes = 1
     Sandbox.create("python")

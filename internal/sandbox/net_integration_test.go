@@ -53,7 +53,7 @@ func TestIntegrationNetworkTwenty(t *testing.T) {
 		}
 	})
 	for i := 0; i < n; i++ {
-		c, err := m.Create(ctx, CreateOptions{Template: "python"})
+		c, err := m.Create(ctx, CreateOptions{Template: "python", Egress: []string{"example.com"}})
 		if err != nil {
 			t.Fatalf("create %d: %v", i, err)
 		}
@@ -106,10 +106,10 @@ func TestIntegrationNetworkTwenty(t *testing.T) {
 		t.Errorf("want %d distinct sources, saw %d", n, len(sources))
 	}
 
-	// Other traffic is not allowed out yet (only DNS, HTTP, HTTPS, ping).
-	r, _ := m.Agent(ids[0]).Run(ctx, agentclient.ExecRequest{Args: []string{"curl", "-sS", "--max-time", "5", "telnet://example.com:25"}}, 0)
+	// Nothing off the allow-list, and never the cloud metadata address.
+	r, _ := m.Agent(ids[0]).Run(ctx, agentclient.ExecRequest{Args: []string{"curl", "-sS", "--max-time", "5", "https://www.iana.org/"}}, 0)
 	if r.Code == 0 {
-		t.Errorf("port 25 reached the internet")
+		t.Errorf("a name off the allow-list was reached")
 	}
 	r, _ = m.Agent(ids[0]).Run(ctx, agentclient.ExecRequest{Args: []string{"curl", "-sS", "--max-time", "3", "http://169.254.169.254/"}}, 0)
 	if r.Code == 0 {

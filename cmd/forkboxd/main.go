@@ -121,6 +121,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	nm.Logf = logger.Printf
 	sbm := sandbox.New(*dataDir, vms, st, nm)
 	sbm.Log = logger
 	sbm.ExposeAddr = *exposeAddr
@@ -209,6 +210,7 @@ func run() error {
 				if err != nil {
 					logger.Printf("reaper: %v", err)
 				}
+				sbm.LogBlocked(ctx)
 			}
 		}
 	}()

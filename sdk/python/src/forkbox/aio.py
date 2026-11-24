@@ -132,6 +132,7 @@ class AsyncSandbox:
     last_fork: ForkTimings | None = None
     limits: Limits | None = None
     error: str = ""
+    egress: tuple[str, ...] = ()
     _client: AsyncClient = field(default_factory=default_client, repr=False, compare=False)
 
     @property
@@ -147,14 +148,16 @@ class AsyncSandbox:
         return cls(m.id, m.template, m.template_id, m.state, m.pid,
                    datetime.fromtimestamp(m.created_at_unix_ms / 1000, tz=timezone.utc), m.ttl_s or None, m.parent, t,
                    limits=Limits._from_pb(m.limits) if m.HasField("limits") else None, error=m.error,
-                   _client=client)
+                   egress=tuple(m.egress), _client=client)
 
     @classmethod
     async def create(cls, template: str = "python", ttl: int | None = None, *, cpus: float | None = None,
                      memory_mib: int | None = None, pids_max: int | None = None,
+                     egress: Sequence[str] | str | None = None,
                      client: AsyncClient | None = None) -> AsyncSandbox:
         c = client or default_client()
-        m = await _call(c.stub.CreateSandbox(_create_request(template, ttl, cpus, memory_mib, pids_max), metadata=c.metadata))
+        m = await _call(c.stub.CreateSandbox(_create_request(template, ttl, cpus, memory_mib, pids_max, egress),
+                                             metadata=c.metadata))
         return cls._from_pb(m, c)
 
     @classmethod

@@ -82,6 +82,7 @@ message Sandbox {
   PagerStats pager = 10;     // uffd-backed sandboxes, in GetSandbox
   Limits limits = 11;        // unset: none
   string error = 12;         // why it failed (state failed)
+  repeated string egress = 13; // the egress allow-list in force
 }
 
 // The page server's counters for a sandbox whose memory is served from a
@@ -111,6 +112,10 @@ message CreateSandboxRequest {
   string template = 1; // name or id
   uint64 ttl_s = 2;
   Limits limits = 3;   // unset: the template's VM size, no extra caps
+  // Added to the template's egress allow-list: domains (a name allows its
+  // subdomains), IPv4 addresses or CIDRs, or "*" for anything. Egress is
+  // denied by default.
+  repeated string egress = 4;
 }
 
 // Per-sandbox limits, enforced by the sandbox's cgroup on the host (CPU,

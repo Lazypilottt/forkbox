@@ -84,10 +84,12 @@ def _describe(sb: Sandbox) -> str:
 def create_sandbox(
     template: Annotated[str, Field(description="Template name, e.g. 'python' (Python 3.12, git, build tools, numpy, pytest) or 'node' (Node.js 22).")] = "python",
     ttl_seconds: Annotated[int, Field(ge=0, le=86400, description="Destroy the sandbox automatically after this many seconds; 0 keeps it until destroy is called.")] = 3600,
+    allow_network: Annotated[list[str] | None, Field(description="Network access is denied by default except what the template allows (python: PyPI). Extra destinations to allow: domains (a domain allows its subdomains), IPv4 addresses or CIDRs.")] = None,
 ) -> str:
     """Create a new sandbox from a template. Returns its id, which every other tool takes."""
-    sb = Sandbox.create(template, ttl=ttl_seconds or None, client=client())
-    return f"Created sandbox {sb.id} from template {sb.template} in {sb.timings.total_ms:.0f} ms."
+    sb = Sandbox.create(template, ttl=ttl_seconds or None, egress=allow_network, client=client())
+    net = ", ".join(sb.egress) or "none"
+    return f"Created sandbox {sb.id} from template {sb.template} in {sb.timings.total_ms:.0f} ms. Network allowed: {net}."
 
 
 @tool(name="exec")

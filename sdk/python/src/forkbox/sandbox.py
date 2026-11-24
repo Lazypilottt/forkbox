@@ -106,9 +106,11 @@ class Limits:
         return cls(m.cpus or None, m.memory_mib or None, m.pids_max or None)
 
 
-def _create_request(template: str, ttl: int | None, cpus, memory_mib, pids_max) -> pb.CreateSandboxRequest:
+def _create_request(template: str, ttl: int | None, cpus, memory_mib, pids_max, egress) -> pb.CreateSandboxRequest:
+    if isinstance(egress, str):
+        egress = [egress]
     return pb.CreateSandboxRequest(template=template, ttl_s=ttl or 0,
-                                   limits=Limits(cpus, memory_mib, pids_max)._pb())
+                                   limits=Limits(cpus, memory_mib, pids_max)._pb(), egress=list(egress or ()))
 
 
 @dataclass(frozen=True)
@@ -230,6 +232,7 @@ class Sandbox:
     pager: dict[str, float] | None = None
     limits: Limits | None = None
     error: str = ""  # why it failed, when state is "failed"
+    egress: tuple[str, ...] = ()  # the egress allow-list in force
     _client: Client = field(default_factory=default_client, repr=False, compare=False)
 
     @property
@@ -250,19 +253,26 @@ class Sandbox:
             ttl=m.ttl_s or None, parent=m.parent, timings=t, _client=client,
             pager={f.name: v for f, v in m.pager.ListFields()} if m.HasField("pager") else None,
             limits=Limits._from_pb(m.limits) if m.HasField("limits") else None, error=m.error,
+            egress=tuple(m.egress),
         )
 
     @classmethod
     def create(cls, template: str = "python", ttl: int | None = None, *, cpus: float | None = None,
-               memory_mib: int | None = None, pids_max: int | None = None, client: Client | None = None) -> Sandbox:
+               memory_mib: int | None = None, pids_max: int | None = None,
+               egress: Sequence[str] | str | None = None, client: Client | None = None) -> Sandbox:
         """Restore a new sandbox from a template. ``ttl`` is in seconds.
 
         ``cpus``, ``memory_mib`` and ``pids_max`` cap the sandbox (see
         :class:`Limits`). When the host is at its density limit this raises
-        :class:`ResourceExhaustedError` at once."""
+        :class:`ResourceExhaustedError` at once.
+
+        Egress is denied by default. ``egress`` adds to the template's
+        allow-list: domains (``"pypi.org"`` also allows its subdomains),
+        IPv4 addresses or CIDRs, or ``"*"`` for anything. Forks inherit it."""
         c = client or default_client()
         try:
-            m = c.stub.CreateSandbox(_create_request(template, ttl, cpus, memory_mib, pids_max), metadata=c.metadata)
+            m = c.stub.CreateSandbox(_create_request(template, ttl, cpus, memory_mib, pids_max, egress),
+                                     metadata=c.metadata)
         except grpc.RpcError as e:
             raise from_rpc(e) from None
         return cls._from_pb(m, c)

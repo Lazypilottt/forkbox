@@ -7,6 +7,8 @@ env:
 warm_up:
   - node -e "require('fs'); require('child_process'); console.log(process.version)"
   - npm --version
+# Egress is denied by default; sandboxes of this template may reach npm.
+egress: [registry.npmjs.org]
 vcpus: 2
 memory_mib: 512
 disk_size_mib: 2048

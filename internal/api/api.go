@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/Lazypilottt/forkbox/internal/agentwire"
+	"github.com/Lazypilottt/forkbox/internal/netns"
 	"github.com/Lazypilottt/forkbox/internal/sandbox"
 	"github.com/Lazypilottt/forkbox/internal/store"
 	"github.com/Lazypilottt/forkbox/internal/template"
@@ -60,7 +61,7 @@ func (s *Server) CreateSandbox(ctx context.Context, r *pb.CreateSandboxRequest) 
 	if r.Template == "" {
 		return nil, status.Error(codes.InvalidArgument, "template is required")
 	}
-	opts := sandbox.CreateOptions{Template: r.Template, TTL: time.Duration(r.TtlS) * time.Second}
+	opts := sandbox.CreateOptions{Template: r.Template, TTL: time.Duration(r.TtlS) * time.Second, Egress: r.Egress}
 	if l := r.Limits; l != nil {
 		opts.Limits = sandbox.Limits{CPUs: l.Cpus, MemoryMiB: int(l.MemoryMib), PidsMax: int(l.PidsMax)}
 	}
@@ -343,6 +344,9 @@ func toPB(sb *store.Sandbox) *pb.Sandbox {
 		CreatedAtUnixMs: sb.CreatedAt.UnixMilli(), TtlS: uint64(sb.TTL / time.Second), Pid: int32(sb.Pid),
 		Error: sb.Error,
 	}
+	if sb.Egress != "" {
+		out.Egress = strings.Split(sb.Egress, ",")
+	}
 	if l := sandbox.ParseLimits(sb.Limits); l != (sandbox.Limits{}) {
 		out.Limits = &pb.Limits{Cpus: l.CPUs, MemoryMib: uint32(l.MemoryMiB), PidsMax: uint32(l.PidsMax)}
 	}
@@ -370,7 +374,7 @@ func toStatus(err error) error {
 		code = codes.AlreadyExists
 	case errors.Is(err, store.ErrNoSlot), errors.Is(err, sandbox.ErrDensity):
 		code = codes.ResourceExhausted
-	case errors.Is(err, fs.ErrInvalid), errors.Is(err, vm.ErrConfig), errors.Is(err, template.ErrSpec):
+	case errors.Is(err, fs.ErrInvalid), errors.Is(err, vm.ErrConfig), errors.Is(err, template.ErrSpec), errors.Is(err, netns.ErrPolicy):
 		code = codes.InvalidArgument
 	case errors.Is(err, fs.ErrPermission):
 		code = codes.PermissionDenied

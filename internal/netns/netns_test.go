@@ -58,7 +58,7 @@ func TestAddrs(t *testing.T) {
 
 func TestSetupCommands(t *testing.T) {
 	m, r := manager(t)
-	if err := m.Setup(context.Background(), "sb-1", 3); err != nil {
+	if err := m.Setup(context.Background(), "sb-1", 3, Policy{Domains: []string{"pypi.org"}, Nets: []netip.Prefix{netip.MustParsePrefix("192.0.2.0/24")}}); err != nil {
 		t.Fatal(err)
 	}
 	want := []string{
@@ -82,21 +82,35 @@ func TestSetupCommands(t *testing.T) {
 	}
 	rules := r.stdins[len(r.stdins)-1]
 	for _, frag := range []string{
-		`iifname "fbx-tap0" ip daddr 172.30.0.1 udp dport 53 dnat to 168.63.129.16`,
 		`iifname "fbx-veth" ip daddr 10.200.0.14 meta l4proto tcp dnat to 172.30.0.2`,
 		`oifname "fbx-veth" ip saddr 172.30.0.1/30 masquerade`,
 		`policy drop;`,
 		`ip daddr { 169.254.0.0/16, 10.200.0.0/16 } drop`,
-		`tcp dport { 53, 80, 443 } accept`,
+		`set allow4 { type ipv4_addr; flags interval; elements = { 192.0.2.0/24 }; }`,
+		`iifname "fbx-tap0" ip daddr @allow4 accept`,
+		`iifname "fbx-tap0" ip daddr @dyn4 accept`,
+		`add @blocked { ip daddr . meta l4proto . th dport } drop`,
+		`iifname "fbx-tap0" ip daddr 172.30.0.1 meta l4proto { tcp, udp } th dport 53 accept`,
 	} {
 		if !strings.Contains(rules, frag) {
 			t.Errorf("namespace rules lack %q:\n%s", frag, rules)
 		}
 	}
+	// Deny by default: no blanket accept, no DNS straight to the upstream.
+	for _, bad := range []string{`iifname "fbx-tap0" accept`, "168.63.129.16", "tcp dport { 53, 80, 443 }"} {
+		if strings.Contains(rules, bad) {
+			t.Errorf("namespace rules contain %q:\n%s", bad, rules)
+		}
+	}
+	nsAddr := netip.MustParseAddr("10.200.0.14")
+	if open := m.nsRuleset(nsAddr, Policy{Open: true}); !strings.Contains(open, `iifname "fbx-tap0" accept`) ||
+		strings.Index(open, `iifname "fbx-tap0" accept`) < strings.Index(open, "169.254.0.0/16") {
+		t.Errorf("open policy: link-local must still be dropped first:\n%s", open)
+	}
 
 	// A build namespace holds only the tap.
 	r.cmds = nil
-	m.Setup(context.Background(), "build-x", -1)
+	m.Setup(context.Background(), "build-x", -1, Policy{})
 	if len(r.cmds) != 6 || strings.Contains(strings.Join(r.cmds, " "), "veth") {
 		t.Errorf("tap-only setup: %v", r.cmds)
 	}

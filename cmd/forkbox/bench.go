@@ -89,7 +89,7 @@ func benchOnce(ctx context.Context, mode string, m *vm.Manager, nm *netns.Manage
 	disk := filepath.Join(work, id+".ext4")
 	os.Remove(disk)
 	defer os.Remove(disk)
-	if err := nm.Setup(ctx, id, -1); err != nil {
+	if err := nm.Setup(ctx, id, -1, netns.Policy{}); err != nil {
 		return 0, err
 	}
 	defer nm.Teardown(context.WithoutCancel(ctx), id)

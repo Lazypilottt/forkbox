@@ -18,6 +18,8 @@ import (
 	"strings"
 
 	"go.yaml.in/yaml/v3"
+
+	"github.com/Lazypilottt/forkbox/internal/netns"
 )
 
 // Spec is a template spec file (templates/*.yaml).
@@ -34,6 +36,11 @@ type Spec struct {
 	VCPUs       int               `yaml:"vcpus,omitempty" json:"vcpus"`
 	MemoryMiB   int               `yaml:"memory_mib,omitempty" json:"memory_mib"`
 	DiskSizeMiB int               `yaml:"disk_size_mib,omitempty" json:"disk_size_mib"`
+	// Egress is the allow-list of every sandbox of the template: domains
+	// (a name allows its subdomains), IPv4 addresses or CIDRs, or "*" for
+	// anything. Empty: no egress. It is policy, not image content, so it
+	// does not change the template id.
+	Egress []string `yaml:"egress,omitempty" json:"egress,omitempty"`
 }
 
 // File copies a host file (Src, relative to the spec file) into the image.
@@ -134,6 +141,9 @@ func (s *Spec) Validate() error {
 	if s.DiskSizeMiB < 256 {
 		return specErr("disk_size_mib %d: at least 256", s.DiskSizeMiB)
 	}
+	if _, err := netns.ParsePolicy(s.Egress); err != nil {
+		return specErr("egress: %v", err)
+	}
 	return nil
 }
 
@@ -185,6 +195,7 @@ func ID(s *Spec, specDir string, versionsYAML, agentBinary []byte) (string, erro
 	}{Format: FormatVersion, Spec: *s}
 	canon.Spec.Files = nil
 	canon.Spec.Env = nil
+	canon.Spec.Egress = nil
 	for _, f := range s.Files {
 		b, err := os.ReadFile(f.path(specDir))
 		if err != nil {

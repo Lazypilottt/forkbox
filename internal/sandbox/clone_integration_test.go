@@ -126,7 +126,7 @@ func cloneSuite(t *testing.T, backend string) {
 	m.MemoryBackend = backend
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
 	defer cancel()
-	parent, err := m.Create(ctx, CreateOptions{Template: "python"})
+	parent, err := m.Create(ctx, CreateOptions{Template: "python", Egress: []string{"example.com"}})
 	if err != nil {
 		t.Fatal(err)
 	}

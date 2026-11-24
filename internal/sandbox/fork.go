@@ -143,12 +143,12 @@ func (m *Manager) ForkWith(ctx context.Context, parentID string, o ForkOptions) 
 			ID: id, Template: parent.Template, TemplateName: parent.TemplateName, Parent: parentID,
 			State: store.StateCreating, Dir: Dir(m.DataDir, id), Jail: vm.JailDir(m.DataDir, id),
 			Cgroup: m.VMs.CgroupPath(id), Vsock: vm.VsockSocketPath(m.DataDir, id), TTL: parent.TTL, BaseLayer: res.Layer,
-			Limits: parent.Limits,
+			Limits: parent.Limits, Egress: parent.Egress,
 		}
 		if err := m.Store.InsertSandbox(ctx, rec); err != nil {
 			return fail(err)
 		}
-		children = append(children, &Created{Sandbox: rec})
+		children = append(children, &Created{Sandbox: rec, seedFrom: parentID})
 		if err := os.MkdirAll(rec.Dir, 0o700); err != nil {
 			return fail(err)
 		}

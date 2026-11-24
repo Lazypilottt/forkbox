@@ -37,7 +37,7 @@ class PoolStatsResponse(_message.Message):
     def __init__(self, pools: _Optional[_Iterable[_Union[PoolStat, _Mapping]]] = ...) -> None: ...
 
 class Sandbox(_message.Message):
-    __slots__ = ("id", "template", "template_id", "parent", "state", "created_at_unix_ms", "ttl_s", "pid", "timings", "pager", "limits", "error")
+    __slots__ = ("id", "template", "template_id", "parent", "state", "created_at_unix_ms", "ttl_s", "pid", "timings", "pager", "limits", "error", "egress")
     ID_FIELD_NUMBER: _ClassVar[int]
     TEMPLATE_FIELD_NUMBER: _ClassVar[int]
     TEMPLATE_ID_FIELD_NUMBER: _ClassVar[int]
@@ -50,6 +50,7 @@ class Sandbox(_message.Message):
     PAGER_FIELD_NUMBER: _ClassVar[int]
     LIMITS_FIELD_NUMBER: _ClassVar[int]
     ERROR_FIELD_NUMBER: _ClassVar[int]
+    EGRESS_FIELD_NUMBER: _ClassVar[int]
     id: str
     template: str
     template_id: str
@@ -62,7 +63,8 @@ class Sandbox(_message.Message):
     pager: PagerStats
     limits: Limits
     error: str
-    def __init__(self, id: _Optional[str] = ..., template: _Optional[str] = ..., template_id: _Optional[str] = ..., parent: _Optional[str] = ..., state: _Optional[str] = ..., created_at_unix_ms: _Optional[int] = ..., ttl_s: _Optional[int] = ..., pid: _Optional[int] = ..., timings: _Optional[_Union[CreateTimings, _Mapping]] = ..., pager: _Optional[_Union[PagerStats, _Mapping]] = ..., limits: _Optional[_Union[Limits, _Mapping]] = ..., error: _Optional[str] = ...) -> None: ...
+    egress: _containers.RepeatedScalarFieldContainer[str]
+    def __init__(self, id: _Optional[str] = ..., template: _Optional[str] = ..., template_id: _Optional[str] = ..., parent: _Optional[str] = ..., state: _Optional[str] = ..., created_at_unix_ms: _Optional[int] = ..., ttl_s: _Optional[int] = ..., pid: _Optional[int] = ..., timings: _Optional[_Union[CreateTimings, _Mapping]] = ..., pager: _Optional[_Union[PagerStats, _Mapping]] = ..., limits: _Optional[_Union[Limits, _Mapping]] = ..., error: _Optional[str] = ..., egress: _Optional[_Iterable[str]] = ...) -> None: ...
 
 class PagerStats(_message.Message):
     __slots__ = ("faults", "copied", "zeroed", "prefetched", "fault_p50_us", "fault_p99_us", "layers", "prefetch_ms")
@@ -103,14 +105,16 @@ class CreateTimings(_message.Message):
     def __init__(self, total_ms: _Optional[float] = ..., disk_ms: _Optional[float] = ..., restore_ms: _Optional[float] = ..., resume_ms: _Optional[float] = ..., agent_ms: _Optional[float] = ..., identity_ms: _Optional[float] = ..., from_pool: _Optional[bool] = ...) -> None: ...
 
 class CreateSandboxRequest(_message.Message):
-    __slots__ = ("template", "ttl_s", "limits")
+    __slots__ = ("template", "ttl_s", "limits", "egress")
     TEMPLATE_FIELD_NUMBER: _ClassVar[int]
     TTL_S_FIELD_NUMBER: _ClassVar[int]
     LIMITS_FIELD_NUMBER: _ClassVar[int]
+    EGRESS_FIELD_NUMBER: _ClassVar[int]
     template: str
     ttl_s: int
     limits: Limits
-    def __init__(self, template: _Optional[str] = ..., ttl_s: _Optional[int] = ..., limits: _Optional[_Union[Limits, _Mapping]] = ...) -> None: ...
+    egress: _containers.RepeatedScalarFieldContainer[str]
+    def __init__(self, template: _Optional[str] = ..., ttl_s: _Optional[int] = ..., limits: _Optional[_Union[Limits, _Mapping]] = ..., egress: _Optional[_Iterable[str]] = ...) -> None: ...
 
 class Limits(_message.Message):
     __slots__ = ("cpus", "memory_mib", "pids_max")
