@@ -96,15 +96,22 @@ func (m *Manager) ForkWith(ctx context.Context, parentID string, o ForkOptions) 
 	if parent.State != store.StateRunning {
 		return nil, fmt.Errorf("%w: sandbox %s is %s", vm.ErrState, parentID, parent.State)
 	}
-	if err := m.checkDensity(n); err != nil {
-		return nil, err
-	}
 	tpl, err := template.Get(m.DataDir, parent.Template)
 	if err != nil {
 		return nil, err
 	}
 	backend, err := m.backendFor(ctx, parent, o.Backend)
 	if err != nil {
+		return nil, err
+	}
+	perChild := 0
+	if backend == BackendUffd {
+		// Page-server children share nothing: each copies what it touches.
+		if ms, err := vm.ReadMemStats(parent.Pid); err == nil {
+			perChild = int(ms.Rss >> 20)
+		}
+	}
+	if err := m.checkDensityMiB(n, perChild); err != nil {
 		return nil, err
 	}
 	baseMem := ""
@@ -168,7 +175,10 @@ func (m *Manager) ForkWith(ctx context.Context, parentID string, o ForkOptions) 
 	}
 	res.Backend = backend
 
-	// Restore the children, at most concurrency at a time.
+	// Restore the children, at most concurrency at a time. The first
+	// failure cancels the rest: the fork is all or nothing.
+	rctx, cancelRest := context.WithCancel(ctx)
+	defer cancelRest()
 	sem := make(chan struct{}, concurrency)
 	var wg sync.WaitGroup
 	errs := make([]error, n)
@@ -178,12 +188,23 @@ func (m *Manager) ForkWith(ctx context.Context, parentID string, o ForkOptions) 
 			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
+			if rctx.Err() != nil {
+				return
+			}
 			t := time.Now()
-			errs[i] = m.restoreInto(ctx, c, snapDir, src, filepath.Join(c.Dir, DiskFile))
+			if errs[i] = m.restoreInto(rctx, c, snapDir, src, filepath.Join(c.Dir, DiskFile)); errs[i] != nil {
+				errs[i] = fmt.Errorf("child %s: %w", c.ID, errs[i])
+				cancelRest()
+			}
 			c.Timings.Total = time.Since(t)
 		}()
 	}
 	wg.Wait()
+	for _, err := range errs {
+		if err != nil && !errors.Is(err, context.Canceled) {
+			return fail(err)
+		}
+	}
 	if err := errors.Join(errs...); err != nil {
 		return fail(err)
 	}

@@ -70,7 +70,12 @@ var ErrDensity = errors.New("the host is at its sandbox density limit")
 // checkDensity refuses n more sandboxes when the host would pass
 // MaxSandboxes, or MemAvailable minus n times PerSandboxMiB would fall
 // under MinFreeMiB: better to fail fast than to let the host swap.
-func (m *Manager) checkDensity(n int) error {
+func (m *Manager) checkDensity(n int) error { return m.checkDensityMiB(n, 0) }
+
+// checkDensityMiB is checkDensity with a known cost per sandbox (0: use
+// PerSandboxMiB). A uffd fork's children each hold a private copy of every
+// page they touch, so they cost about the parent's resident memory.
+func (m *Manager) checkDensityMiB(n, perMiB int) error {
 	if m.MaxSandboxes > 0 {
 		all, err := m.Store.ListSandboxes(context.Background())
 		if err != nil {
@@ -88,7 +93,7 @@ func (m *Manager) checkDensity(n int) error {
 	}
 	if m.MinFreeMiB > 0 {
 		avail, ok := memAvailableMiB()
-		per := m.PerSandboxMiB
+		per := max(m.PerSandboxMiB, perMiB)
 		if per <= 0 {
 			per = 64
 		}

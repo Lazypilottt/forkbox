@@ -56,6 +56,7 @@ func newTestManager(t *testing.T) *Manager {
 		t.Fatal(err)
 	}
 	m := New(data, vms, st, nm)
+	m.MinFreeMiB, m.PerSandboxMiB = 256, 32 // forkboxd's defaults
 	// The page server runs as `forkboxd pagesrv` (built by make integration).
 	if bin, err := filepath.Abs("../../bin/forkboxd"); err == nil {
 		m.PagerBinary = bin

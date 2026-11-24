@@ -12,10 +12,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Lazypilottt/forkbox/internal/vm"
 	"github.com/Lazypilottt/forkbox/internal/vm/agentclient"
 )
 
-// The clone-correctness suite: one parent, forked into 50 children.
+// The clone-correctness suite: one parent, forked into 50 children (fewer
+// with the uffd backend on a small host).
 
 // A long-lived process started in the parent before the fork. It keeps
 // user-space random state that every child inherits.
@@ -156,7 +158,20 @@ func cloneSuite(t *testing.T, backend string) {
 	// any long-running guest process would have.
 	parentBoot := sh(t, m, parent.ID, "cat /proc/sys/kernel/random/boot_id")
 
-	res, err := m.Fork(ctx, parent.ID, 50, 0)
+	n := 50
+	if backend == BackendUffd {
+		// Page-server children each hold a private copy of what they touch
+		// (about the parent's resident memory): fork as many as fit in
+		// half of the available memory.
+		ms, err := vm.ReadMemStats(parent.Pid)
+		avail, ok := memAvailableMiB()
+		if err != nil || !ok {
+			t.Fatalf("memory: %v", err)
+		}
+		n = min(n, max(4, avail/2/int(ms.Rss>>20+1)))
+		t.Logf("uffd: parent resident %d MiB, %d MiB available: forking %d children", ms.Rss>>20, avail, n)
+	}
+	res, err := m.Fork(ctx, parent.ID, n, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -165,7 +180,7 @@ func cloneSuite(t *testing.T, backend string) {
 		kids = append(kids, c.ID)
 		all = append(all, c.ID)
 	}
-	t.Logf("fork into 50: parent paused %s, %.1f MiB dirty, merge %s, total %s", res.Timings.ParentPaused,
+	t.Logf("fork into %d: parent paused %s, %.1f MiB dirty, merge %s, total %s", n, res.Timings.ParentPaused,
 		mb(res.Timings.DirtyBytes), res.Timings.Merge, res.Timings.Total)
 
 	t.Run("kernel randomness", func(t *testing.T) {

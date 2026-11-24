@@ -232,7 +232,11 @@ func (m *Manager) finishRestore(ctx context.Context, c *Created, v *vm.VM) error
 	pong, err := ac.WaitReady(actx)
 	cancel()
 	if err != nil {
-		return fmt.Errorf("agent did not answer within %s: %w", at, err)
+		err = fmt.Errorf("agent did not answer within %s: %w", at, err)
+		if st, serr := m.PagerStats(rec.ID); serr == nil && st != nil {
+			err = fmt.Errorf("%w (page server: %v)", err, st)
+		}
+		return err
 	}
 	c.Timings.Agent = time.Since(t)
 
