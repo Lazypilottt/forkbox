@@ -78,7 +78,7 @@ func TestIntegrationBuildTiny(t *testing.T) {
 	disk := filepath.Join(data, "test", "tiny-restore.ext4")
 	os.MkdirAll(filepath.Dir(disk), 0o755)
 	os.Remove(disk)
-	must(t, storage.Reflink(tpl.Rootfs(), disk))
+	must(t, storage.ReflinkOrCopy(tpl.Rootfs(), disk))
 	t.Cleanup(func() { os.Remove(disk) })
 	// The snapshot has the guest's network device, so the restored VM needs
 	// a namespace with the tap (no uplink is needed here).

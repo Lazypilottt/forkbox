@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/Lazypilottt/forkbox/internal/netns"
-	"github.com/Lazypilottt/forkbox/internal/storage"
 	"github.com/Lazypilottt/forkbox/internal/store"
 	"github.com/Lazypilottt/forkbox/internal/template"
 	"github.com/Lazypilottt/forkbox/internal/vm"
@@ -74,7 +73,7 @@ func (m *Manager) Checkpoint(ctx context.Context, id, name string) (*store.Check
 		}
 	}
 	if err != nil {
-		os.RemoveAll(cp.Dir)
+		m.disks().RemoveAll(ctx, cp.Dir)
 		return nil, nil, fmt.Errorf("checkpoint %s: %w", id, err)
 	}
 	tm.Total = time.Since(start)
@@ -124,10 +123,10 @@ func (m *Manager) Rewind(ctx context.Context, id, name string) (*Created, error)
 		return nil, m.failSandbox(ctx, id, err)
 	}
 	disk := filepath.Join(sb.Dir, DiskFile)
-	if err := os.Remove(disk); err != nil && !errors.Is(err, os.ErrNotExist) {
+	if err := m.disks().Remove(ctx, disk); err != nil {
 		return nil, m.failSandbox(ctx, id, err)
 	}
-	if err := storage.Reflink(filepath.Join(cp.Dir, DiskFile), disk); err != nil {
+	if err := m.cloneDisk(ctx, filepath.Join(cp.Dir, DiskFile), disk); err != nil {
 		return nil, m.failSandbox(ctx, id, err)
 	}
 	c := &Created{Sandbox: sb}
@@ -190,7 +189,7 @@ func (m *Manager) RestoreAsNew(ctx context.Context, sandboxID, nameOrID string, 
 			return err
 		}
 		disk := filepath.Join(rec.Dir, DiskFile)
-		if err := storage.Reflink(filepath.Join(cp.Dir, DiskFile), disk); err != nil {
+		if err := m.cloneDisk(ctx, filepath.Join(cp.Dir, DiskFile), disk); err != nil {
 			return err
 		}
 		return m.restoreInto(ctx, c, snapDir, src, disk)
@@ -213,7 +212,7 @@ func (m *Manager) DeleteCheckpoint(ctx context.Context, sandboxID, nameOrID stri
 	if err := m.Store.DeleteCheckpoint(ctx, cp.ID); err != nil {
 		return err
 	}
-	if err := os.RemoveAll(cp.Dir); err != nil {
+	if err := m.disks().RemoveAll(ctx, cp.Dir); err != nil {
 		return err
 	}
 	m.gc(ctx)

@@ -34,6 +34,9 @@ type Result struct {
 type Config struct {
 	DataDir  string
 	Versions *versions.File
+	// Storage is the disk backend forkboxd will use: storage.BackendReflink
+	// (default) or storage.BackendDMThin, which needs no reflinks.
+	Storage string
 }
 
 // Check is one named host check.

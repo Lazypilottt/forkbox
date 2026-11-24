@@ -219,6 +219,9 @@ func checkDataDirFS(_ context.Context, env Env, cfg Config) Result {
 	if err != nil {
 		return fail("cannot detect the filesystem of "+d+": "+err.Error(), "")
 	}
+	if cfg.Storage == storage.BackendDMThin {
+		return pass(d + " is on " + t + " (disks are device-mapper thin volumes)")
+	}
 	if !storage.ReflinkCapable(t) {
 		return fail(fmt.Sprintf("%s is on %s; Forkbox needs XFS or btrfs for reflink copies", d, t), mountXFSFix(d))
 	}
@@ -232,6 +235,15 @@ func checkDataDirReflink(_ context.Context, env Env, cfg Config) Result {
 	d := cfg.DataDir
 	if fi, err := env.Stat(d); err != nil || !fi.IsDir() {
 		return fail("skipped: "+d+" is not available (see data-dir-fs)", "")
+	}
+	if cfg.Storage == storage.BackendDMThin {
+		if _, err := env.LookPath("dmsetup"); err != nil {
+			return fail("dmsetup is missing (the dmthin disk backend uses it)", "sudo apt-get install -y dmsetup")
+		}
+		if _, err := env.LookPath("losetup"); err != nil {
+			return fail("losetup is missing (the dmthin disk backend uses it)", "sudo apt-get install -y mount")
+		}
+		return pass("no reflinks needed: disks are device-mapper thin snapshots (dmsetup found)")
 	}
 	err := env.ProbeReflink(d)
 	switch {

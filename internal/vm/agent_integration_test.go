@@ -40,14 +40,15 @@ func (e *kvmEnv) agentImage(t *testing.T) string {
 	})
 }
 
-// disk gives a VM its own writable copy of an image: a reflink, so instant.
+// disk gives a VM its own writable copy of an image: a reflink (instant)
+// where the data dir can reflink.
 func (e *kvmEnv) disk(t *testing.T, img, name string) string {
 	t.Helper()
 	dir := filepath.Join(e.dataDir, "test", "disks")
 	must(t, os.MkdirAll(dir, 0o755))
 	p := filepath.Join(dir, name+".ext4")
 	os.Remove(p)
-	must(t, storage.Reflink(img, p))
+	must(t, storage.ReflinkOrCopy(img, p))
 	t.Cleanup(func() { os.Remove(p) })
 	return p
 }

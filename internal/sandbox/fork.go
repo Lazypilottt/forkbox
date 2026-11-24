@@ -291,7 +291,7 @@ func (m *Manager) snapshotLayer(ctx context.Context, sb *store.Sandbox, v *vm.VM
 	t = time.Now()
 	src := filepath.Join(sb.Dir, DiskFile)
 	for _, d := range disks {
-		if err := storage.Reflink(src, d); err != nil {
+		if err := m.cloneDisk(ctx, src, d); err != nil {
 			return err
 		}
 	}
@@ -406,7 +406,7 @@ func (m *Manager) snapshotDiffLayer(ctx context.Context, sb *store.Sandbox, v *v
 	t = time.Now()
 	src := filepath.Join(sb.Dir, DiskFile)
 	for _, d := range disks {
-		if err := storage.Reflink(src, d); err != nil {
+		if err := m.cloneDisk(ctx, src, d); err != nil {
 			return err
 		}
 	}

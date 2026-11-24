@@ -26,8 +26,16 @@ type MergeStats struct {
 // data extent of diff is cloned in with FICLONERANGE (also shared), falling
 // back to copy_file_range where a range cannot be cloned. Nothing outside
 // the dirty pages is read or written.
+//
+// Where the filesystem cannot reflink (a dmthin host's data directory),
+// out starts as a sparse copy of base instead: slower, but the same result.
 func MergeDiff(base, diff, out string) (*MergeStats, error) {
-	if err := Reflink(base, out); err != nil {
+	if err := Reflink(base, out); errors.Is(err, ErrNoReflink) {
+		if err := copySparse(base, out); err != nil {
+			os.Remove(out)
+			return nil, err
+		}
+	} else if err != nil {
 		return nil, err
 	}
 	st, err := applyDiff(out, diff)

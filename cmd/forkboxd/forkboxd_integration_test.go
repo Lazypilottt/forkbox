@@ -50,7 +50,7 @@ func startDaemon(t *testing.T) *daemon {
 	if d.log, err = os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	d.cmd = exec.Command(daemonBinary, "--data-dir", d.data, "--ttl-sweep", "1s")
+	d.cmd = exec.Command(daemonBinary, "--data-dir", d.data, "--ttl-sweep", "1s", "--storage", storageBackend())
 	d.cmd.Stdout, d.cmd.Stderr = d.log, d.log
 	if err := d.cmd.Start(); err != nil {
 		t.Fatal(err)
@@ -484,4 +484,12 @@ func TestIntegrationDaemonStress(t *testing.T) {
 		t.Errorf("RSS grew from %d KiB to %d KiB", base.rssKB, last.rssKB)
 	}
 	t.Logf("%d forks into %d children in %s; RSS %d -> %d KiB, fds %d -> %d", forks, kids, dur, base.rssKB, last.rssKB, base.fds, last.fds)
+}
+
+// storageBackend is the disk backend under test (FORKBOX_STORAGE).
+func storageBackend() string {
+	if s := os.Getenv("FORKBOX_STORAGE"); s != "" {
+		return s
+	}
+	return "reflink"
 }

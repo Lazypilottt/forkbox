@@ -48,12 +48,18 @@ jobs:
           python -m pytest -q sdk/python mcp
 
   integration:
-    name: integration tests (KVM)
+    name: integration tests (KVM, ${{ matrix.storage }} disks)
     needs: unit
     # GitHub's standard Linux runners expose hardware virtualization; the
     # job grants access to /dev/kvm and runs real Firecracker microVMs.
     runs-on: ubuntu-24.04
     timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        # reflink: the data dir on XFS. dmthin: on ext4, which cannot
+        # reflink, with disks as device-mapper thin snapshots.
+        storage: [reflink, dmthin]
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-go@v6
@@ -76,7 +82,7 @@ jobs:
       - name: host tools
         run: |
           sudo apt-get update -q
-          sudo apt-get install -y -q --no-install-recommends squashfs-tools e2fsprogs xfsprogs nftables tcpdump
+          sudo apt-get install -y -q --no-install-recommends squashfs-tools e2fsprogs xfsprogs nftables tcpdump dmsetup
       # Host setup an operator does once (Forkbox never changes host network
       # settings or other firewall tables itself): IPv4 forwarding, and,
       # because Docker sets the FORWARD policy to drop, accepting the
@@ -88,13 +94,17 @@ jobs:
             sudo iptables -I DOCKER-USER -s 10.200.0.0/16 -j ACCEPT
             sudo iptables -I DOCKER-USER -d 10.200.0.0/16 -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
           fi
-      - name: data dir on reflink XFS
+      - name: data dir (XFS with reflink, or ext4 for dmthin)
         run: |
           # A sparse loop file on whichever disk has more room.
           dir=/mnt
           if [ "$(df --output=avail -B1 / | tail -1)" -gt "$(df --output=avail -B1 /mnt 2>/dev/null | tail -1 || echo 0)" ]; then dir=/var/tmp; fi
           sudo truncate -s 24G "$dir/forkbox-data.img"
-          sudo mkfs.xfs -q -m reflink=1 "$dir/forkbox-data.img"
+          if [ "${{ matrix.storage }}" = dmthin ]; then
+            sudo mkfs.ext4 -q "$dir/forkbox-data.img"
+          else
+            sudo mkfs.xfs -q -m reflink=1 "$dir/forkbox-data.img"
+          fi
           sudo mkdir -p /var/lib/forkbox
           sudo mount -o loop "$dir/forkbox-data.img" /var/lib/forkbox
           df -hT /var/lib/forkbox
@@ -103,7 +113,7 @@ jobs:
           go build -o bin/forkbox ./cmd/forkbox
           sudo -n bin/forkbox setup
       - name: forkbox doctor
-        run: sudo -n bin/forkbox doctor
+        run: sudo -n bin/forkbox doctor --storage ${{ matrix.storage }}
       - name: templates
         run: |
           make build
@@ -119,10 +129,10 @@ jobs:
           sudo -n bin/forkbox templates inspect python
           sudo -n bin/forkbox templates inspect node
       - name: integration tests
-        run: make integration GOTESTFLAGS="-v -timeout 40m"
+        run: make integration GOTESTFLAGS="-v -timeout 40m" TESTENV="FORKBOX_STORAGE=${{ matrix.storage }}"
       # Before the workflow's own daemon starts: it starts its own.
       - name: stress (fork 10 at a time for 30 minutes)
-        if: github.event_name == 'workflow_dispatch' && inputs.stress
+        if: github.event_name == 'workflow_dispatch' && inputs.stress && matrix.storage == 'reflink'
         run: go test -tags integration -count=1 -v -timeout 50m -exec 'sudo -n env FORKBOX_STRESS=30m' -run TestIntegrationDaemonStress ./cmd/forkboxd/
       - uses: actions/setup-python@v6
         with:
@@ -131,7 +141,7 @@ jobs:
         run: |
           python -m venv "$RUNNER_TEMP/venv"
           "$RUNNER_TEMP/venv/bin/pip" install -q -e 'sdk/python[test]' -e 'mcp[test]' matplotlib
-          sudo -n sh -c 'bin/forkboxd --warm python=2:8 > /var/lib/forkbox/forkboxd.log 2>&1 &'
+          sudo -n sh -c 'bin/forkboxd --storage ${{ matrix.storage }} --warm python=2:8 > /var/lib/forkbox/forkboxd.log 2>&1 &'
           for i in $(seq 1 50); do sudo -n test -S /var/lib/forkbox/run/forkboxd.sock && break; sleep 0.2; done
           sudo -n stat -c '%a %U %n' /var/lib/forkbox/run /var/lib/forkbox/run/forkboxd.sock
       - name: SDK against the daemon
@@ -143,14 +153,14 @@ jobs:
       - name: bench/restore.py
         run: sudo -n "$RUNNER_TEMP/venv/bin/python" bench/restore.py --runs 100
       - name: bench/fork_curve.py
-        if: github.event_name == 'workflow_dispatch' && inputs.bench
+        if: github.event_name == 'workflow_dispatch' && inputs.bench && matrix.storage == 'reflink'
         run: |
           sudo -n bin/forkbox templates build bench/fork-template.yaml
           sudo -n "$RUNNER_TEMP/venv/bin/python" bench/fork_curve.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: bench-results
+          name: bench-results-${{ matrix.storage }}
           path: bench/results/
           if-no-files-found: ignore
       - name: host kernel log (on failure)
@@ -160,6 +170,7 @@ jobs:
         if: always()
         run: sudo -n cat /var/lib/forkbox/forkboxd.log || true
       - name: doctor in a container without /dev/kvm
+        if: matrix.storage == 'reflink'
         run: |
           CGO_ENABLED=0 go build -o bin/forkbox-static ./cmd/forkbox
           set +e

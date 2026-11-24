@@ -211,7 +211,7 @@ func (m *Manager) prepareWarm(ctx context.Context, name string, p *pools) (strin
 			return err
 		}
 		disk := filepath.Join(rec.Dir, DiskFile)
-		if err := reflinkDisk(tpl.Rootfs(), disk); err != nil {
+		if err := m.cloneDisk(ctx, tpl.Rootfs(), disk); err != nil {
 			return err
 		}
 		return m.restoreInto(ctx, c, tpl.SnapshotDir(), memSource{File: filepath.Join(tpl.SnapshotDir(), vm.SnapshotMemFile)}, disk)

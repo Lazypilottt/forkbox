@@ -15,6 +15,7 @@ import (
 
 	"github.com/Lazypilottt/forkbox/internal/datadir"
 	"github.com/Lazypilottt/forkbox/internal/netns"
+	"github.com/Lazypilottt/forkbox/internal/storage"
 	"github.com/Lazypilottt/forkbox/internal/store"
 	"github.com/Lazypilottt/forkbox/internal/template"
 	"github.com/Lazypilottt/forkbox/internal/testutil"
@@ -57,6 +58,14 @@ func newTestManager(t *testing.T) *Manager {
 	}
 	m := New(data, vms, st, nm)
 	m.MinFreeMiB, m.PerSandboxMiB = 256, 32 // forkboxd's defaults
+	// FORKBOX_STORAGE=dmthin runs the suite on device-mapper thin disks.
+	if os.Getenv("FORKBOX_STORAGE") == storage.BackendDMThin {
+		th := storage.NewThin(data, 0)
+		if err := th.Ensure(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		m.Disks = th
+	}
 	// The page server runs as `forkboxd pagesrv` (built by make integration).
 	if bin, err := filepath.Abs("../../bin/forkboxd"); err == nil {
 		m.PagerBinary = bin

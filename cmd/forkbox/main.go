@@ -15,6 +15,7 @@ import (
 	"github.com/Lazypilottt/forkbox/internal/datadir"
 	"github.com/Lazypilottt/forkbox/internal/doctor"
 	"github.com/Lazypilottt/forkbox/internal/setup"
+	"github.com/Lazypilottt/forkbox/internal/storage"
 	"github.com/Lazypilottt/forkbox/internal/versions"
 )
 
@@ -92,6 +93,7 @@ func newFlagSet(name string, stderr io.Writer, c *commonFlags) *flag.FlagSet {
 func runDoctor(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	var c commonFlags
 	fs := newFlagSet("doctor", stderr, &c)
+	st := fs.String("storage", storage.BackendReflink, "disk backend forkboxd will use: reflink (XFS, btrfs) or dmthin (any filesystem)")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
@@ -102,7 +104,7 @@ func runDoctor(ctx context.Context, args []string, stdout, stderr io.Writer) int
 	}
 	fmt.Fprintf(stdout, "forkbox doctor: Firecracker %s, guest kernel %s, data dir %s\n\n",
 		v.Firecracker.Version, v.GuestKernel.Version, c.dataDir)
-	results := doctor.Run(ctx, doctor.System{}, doctor.Config{DataDir: c.dataDir, Versions: v})
+	results := doctor.Run(ctx, doctor.System{}, doctor.Config{DataDir: c.dataDir, Versions: v, Storage: *st})
 	doctor.Print(stdout, results)
 	if doctor.Failed(results) > 0 {
 		return 1

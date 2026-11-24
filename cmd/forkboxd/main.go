@@ -22,6 +22,7 @@ import (
 	"github.com/Lazypilottt/forkbox/internal/datadir"
 	"github.com/Lazypilottt/forkbox/internal/netns"
 	"github.com/Lazypilottt/forkbox/internal/sandbox"
+	"github.com/Lazypilottt/forkbox/internal/storage"
 	"github.com/Lazypilottt/forkbox/internal/store"
 	"github.com/Lazypilottt/forkbox/internal/versions"
 	"github.com/Lazypilottt/forkbox/internal/vm"
@@ -68,6 +69,8 @@ func run() error {
 	maxSandboxes := flag.Int("max-sandboxes", 0, "refuse creates and forks past this many sandboxes on the host (0: no cap)")
 	minFree := flag.Int("min-free-memory-mib", 256, "refuse creates and forks that would leave less available host memory than this (0: off)")
 	perSandbox := flag.Int("per-sandbox-mib", 32, "host memory a new sandbox is assumed to need, for --min-free-memory-mib (sandboxes share their template's memory until they write)")
+	diskBackend := flag.String("storage", storage.BackendReflink, "disk backend: reflink (data dir on XFS or btrfs) or dmthin (device-mapper thin pool on loop files in the data dir; any filesystem)")
+	thinSize := flag.Int64("dmthin-size-gib", storage.DefaultThinSize>>30, "dmthin: size of the pool's sparse data file, in GiB")
 	reapEvery := flag.Duration("reap-sweep", 15*time.Second, "how often to look for sandboxes whose VM or page server died")
 	showVersion := flag.Bool("version", false, "print the version and exit")
 	flag.Parse()
@@ -128,6 +131,18 @@ func run() error {
 	sbm.MemoryBackend = *memBackend
 	sbm.Prefetch = *prefetch
 	sbm.MaxSandboxes, sbm.MinFreeMiB, sbm.PerSandboxMiB = *maxSandboxes, *minFree, *perSandbox
+	switch *diskBackend {
+	case storage.BackendReflink:
+	case storage.BackendDMThin:
+		th := storage.NewThin(*dataDir, *thinSize<<30)
+		if err := th.Ensure(context.Background()); err != nil {
+			return err
+		}
+		sbm.Disks = th
+		logger.Printf("disks: dmthin pool %s (%d GiB sparse)", th.PoolName, *thinSize)
+	default:
+		return fmt.Errorf("--storage %q: use reflink or dmthin", *diskBackend)
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()

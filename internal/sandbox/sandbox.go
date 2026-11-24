@@ -47,6 +47,8 @@ type Manager struct {
 	// Prefetch makes page servers copy the newest layer before the first
 	// fault (uffd backend).
 	Prefetch bool
+	// Disks makes sandbox disks (default: reflinks).
+	Disks storage.Disks
 	// PagerBinary runs the page server ("<it> pagesrv ..."); default: this
 	// executable (forkboxd).
 	PagerBinary string
@@ -194,7 +196,7 @@ func (m *Manager) create(ctx context.Context, tpl *template.Template, rec *store
 		return nil, err
 	}
 	disk := filepath.Join(rec.Dir, DiskFile)
-	if err := reflinkDisk(tpl.Rootfs(), disk); err != nil {
+	if err := m.cloneDisk(ctx, tpl.Rootfs(), disk); err != nil {
 		return nil, err
 	}
 	c.Timings.Disk = time.Since(t)
@@ -340,7 +342,7 @@ func (m *Manager) cleanup(ctx context.Context, id, dir string) error {
 	}
 	// After the VM: the namespace (and its veth) goes once nothing uses it.
 	errs = append(errs, m.Net.Teardown(context.WithoutCancel(ctx), id))
-	if err := os.RemoveAll(dir); err != nil {
+	if err := m.disks().RemoveAll(context.WithoutCancel(ctx), dir); err != nil {
 		errs = append(errs, err)
 	}
 	return errors.Join(errs...)
@@ -469,18 +471,23 @@ func (m *Manager) Recover(ctx context.Context) (*RecoverReport, error) {
 	dirs, _ := filepath.Glob(filepath.Join(m.DataDir, "checkpoints", "cp-*"))
 	for _, d := range dirs {
 		if !knownCP[filepath.Base(d)] {
-			os.RemoveAll(d)
+			m.disks().RemoveAll(ctx, d)
 			rep.Orphans = append(rep.Orphans, filepath.Base(d))
 		}
 	}
 	dirs, _ = filepath.Glob(filepath.Join(m.DataDir, "layers", "layer-*"))
 	for _, d := range dirs {
 		if _, err := m.Store.GetLayer(ctx, filepath.Base(d)); errors.Is(err, store.ErrNotFound) {
-			os.RemoveAll(d)
+			m.disks().RemoveAll(ctx, d)
 			rep.Orphans = append(rep.Orphans, filepath.Base(d))
 		}
 	}
 	m.gc(ctx)
+	if freed, err := m.disks().Reap(ctx); err != nil {
+		errs = append(errs, fmt.Errorf("disks: %w", err))
+	} else {
+		rep.Orphans = append(rep.Orphans, freed...)
+	}
 	return rep, errors.Join(errs...)
 }
 
@@ -603,10 +610,17 @@ func proxy(c net.Conn, target string) {
 	<-done
 }
 
-// reflinkDisk copies a template disk for a sandbox, failing clearly where
-// the filesystem cannot reflink.
-func reflinkDisk(src, dst string) error {
-	if err := storage.Reflink(src, dst); err != nil {
+func (m *Manager) disks() storage.Disks {
+	if m.Disks == nil {
+		return storage.Reflinks{}
+	}
+	return m.Disks
+}
+
+// cloneDisk makes a sandbox disk from src, failing clearly where the
+// filesystem cannot reflink.
+func (m *Manager) cloneDisk(ctx context.Context, src, dst string) error {
+	if err := m.disks().Clone(ctx, src, dst); err != nil {
 		if errors.Is(err, storage.ErrNoReflink) {
 			return fmt.Errorf("%w (%v)", ErrNoReflink, err)
 		}

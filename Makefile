@@ -1,5 +1,7 @@
 STATICCHECK_VERSION ?= 2026.2.2
 GOTESTFLAGS ?=
+# Environment for the integration test binaries, e.g. FORKBOX_STORAGE=dmthin.
+TESTENV ?=
 
 .PHONY: build agent proto check integration fmt
 
@@ -37,4 +39,4 @@ check:
 
 # On the KVM host. Test binaries run as root (jailer, cgroups, namespaces).
 integration: build
-	go test -tags integration -count=1 -p 1 $(GOTESTFLAGS) -exec 'sudo -n' ./...
+	go test -tags integration -count=1 -p 1 $(GOTESTFLAGS) -exec 'sudo -n env $(TESTENV)' ./...

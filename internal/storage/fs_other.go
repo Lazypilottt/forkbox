@@ -29,3 +29,6 @@ func MergeDiff(base, diff, out string) (*MergeStats, error) { return nil, ErrUns
 
 // DataBytes needs Linux.
 func DataBytes(path string) (int64, error) { return 0, ErrUnsupportedOS }
+
+// ReflinkOrCopy is Linux-only.
+func ReflinkOrCopy(src, dst string) error { return ErrUnsupportedOS }
