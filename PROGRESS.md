@@ -986,8 +986,11 @@ named here. Numbers are from 2–4 vCPU nested-virtualization CI runners.
   Those pages are the ones the parent's KVM kept writing, so they are in
   the newest layer: the page server now prefetches it and the VM resumes
   only after that (on by default, `--prefetch=false` to turn off). In the
-  first run with it (45454460669, AMD runners) the uffd clone suite passed
-  in both jobs.
+  first runs with it the uffd clone suite passed (45454460669, 45457177555),
+  but in 45459229854 a child stalled the same way after prefetching all
+  10,796 pages of the newest layer and 1,113 more faults. So that theory
+  is wrong or incomplete; see Open bugs. The prefetch stays: it removes
+  most of a child's faults.
 - **Bug found by that run:** with prefetch on, a hugepage child's guest
   panicked executing zeros. Serve and Prefetch run at the same time and
   shared the 2 MiB scratch buffer that assembles a huge page; each now has
@@ -1068,9 +1071,37 @@ named here. Numbers are from 2–4 vCPU nested-virtualization CI runners.
 
 ---
 
+## Open bugs
+
+1. **Intermittent stall of a uffd (page server) child** (Task 12 backend;
+   the default merge backend is not affected). In
+   `TestIntegrationCloneCorrectnessUffd`, about one run in two (AMD EPYC
+   7763 and 9V45, Intel Xeon 8370C; reflink and dmthin), one of the 16
+   children never answers its agent after resume. At that point:
+   - both vCPU threads sleep in `kvm_vcpu_block` (the guest is halted,
+     waiting for an interrupt), Firecracker's threads are idle;
+   - the page server is idle: no deferred fault, last fault served
+     0.4–1 s earlier, 1,100–2,600 faults served, no removes;
+   - the console's last line is the kernel's `crng reseeded due to virtual
+     machine fork`, so the guest kernel ran after the resume;
+   - prefetching the newest layer before the resume did not prevent it.
+   Not yet tried: checking whether the guest answers on its network
+   interface (kernel alive, only vsock stuck), comparing the vsock and
+   virtio queue state, and a kernel stack of the vCPU threads. The suite
+   still runs in `make integration` and fails CI when it happens; whether
+   to keep it gating is open (Needs you).
+
 ## Blocked
 
 Nothing.
+
+## Needs you
+
+1. **The uffd clone suite and CI.** It catches a real, unsolved bug in the
+   optional uffd memory backend (Open bugs 1) and fails CI about every
+   other run. Options: keep it gating (CI red until fixed), or run it in a
+   CI step of its own that is reported but does not gate. I have not
+   changed it.
 
 ## TODO (manual)
 
