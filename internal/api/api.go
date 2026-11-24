@@ -35,6 +35,7 @@ type Backend interface {
 	Expose(ctx context.Context, id string, guestPort, hostPort int) (int, error)
 	ForkWith(ctx context.Context, id string, o sandbox.ForkOptions) (*sandbox.ForkResult, error)
 	PagerStats(id string) (map[string]any, error)
+	PoolStats() []sandbox.PoolStat
 	Checkpoint(ctx context.Context, id, name string) (*store.Checkpoint, *sandbox.ForkTimings, error)
 	Checkpoints(ctx context.Context, id string) ([]*store.Checkpoint, error)
 	Rewind(ctx context.Context, id, name string) (*sandbox.Created, error)
@@ -68,6 +69,7 @@ func (s *Server) CreateSandbox(ctx context.Context, r *pb.CreateSandboxRequest) 
 	out.Timings = &pb.CreateTimings{
 		TotalMs: ms(c.Timings.Total), DiskMs: ms(c.Timings.Disk), RestoreMs: ms(c.Timings.Restore),
 		ResumeMs: ms(c.Timings.Resume), AgentMs: ms(c.Timings.Agent), IdentityMs: ms(c.Timings.Identity),
+		FromPool: c.FromPool,
 	}
 	return out, nil
 }
@@ -139,6 +141,15 @@ func (s *Server) ForkSandbox(ctx context.Context, r *pb.ForkSandboxRequest) (*pb
 	}
 	for _, c := range res.Children {
 		out.Children = append(out.Children, toPB(c.Sandbox))
+	}
+	return out, nil
+}
+
+func (s *Server) PoolStats(context.Context, *pb.PoolStatsRequest) (*pb.PoolStatsResponse, error) {
+	out := &pb.PoolStatsResponse{}
+	for _, p := range s.B.PoolStats() {
+		out.Pools = append(out.Pools, &pb.PoolStat{Template: p.Template, Ready: uint32(p.Ready), Target: uint32(p.Target),
+			Hits: p.Hits, Misses: p.Misses, Demand_10M: uint32(p.Demand10m), MemoryMibPerSandbox: uint32(p.MemoryMiBPerSandbox), LastError: p.LastError})
 	}
 	return out, nil
 }

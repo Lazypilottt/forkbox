@@ -47,6 +47,26 @@ service Forkbox {
   // Creates a separate sandbox from a checkpoint.
   rpc RestoreCheckpoint(RestoreCheckpointRequest) returns (Sandbox);
   rpc DeleteCheckpoint(DeleteCheckpointRequest) returns (DeleteCheckpointResponse);
+  // Warm pools: K restored, paused sandboxes per template, so a create is a
+  // resume. K follows demand within a memory budget.
+  rpc PoolStats(PoolStatsRequest) returns (PoolStatsResponse);
+}
+
+message PoolStatsRequest {}
+
+message PoolStat {
+  string template = 1;
+  uint32 ready = 2;
+  uint32 target = 3;
+  uint64 hits = 4;
+  uint64 misses = 5;
+  uint32 demand_10m = 6; // creates of this template in the last 10 minutes
+  uint32 memory_mib_per_sandbox = 7;
+  string last_error = 8;
+}
+
+message PoolStatsResponse {
+  repeated PoolStat pools = 1;
 }
 
 message Sandbox {
@@ -82,6 +102,7 @@ message CreateTimings {
   double resume_ms = 4;
   double agent_ms = 5;    // until the guest agent answered
   double identity_ms = 6; // reseed, machine-id, hostname, clock
+  bool from_pool = 7;      // a warm pool's sandbox was handed out
 }
 
 message CreateSandboxRequest {

@@ -130,7 +130,7 @@ jobs:
         run: |
           python -m venv "$RUNNER_TEMP/venv"
           "$RUNNER_TEMP/venv/bin/pip" install -q -e 'sdk/python[test]' -e 'mcp[test]' matplotlib
-          sudo -n sh -c 'bin/forkboxd > /var/lib/forkbox/forkboxd.log 2>&1 &'
+          sudo -n sh -c 'bin/forkboxd --warm python=2:8 > /var/lib/forkbox/forkboxd.log 2>&1 &'
           for i in $(seq 1 50); do sudo -n test -S /var/lib/forkbox/run/forkboxd.sock && break; sleep 0.2; done
           sudo -n stat -c '%a %U %n' /var/lib/forkbox/run /var/lib/forkbox/run/forkboxd.sock
       - name: SDK against the daemon

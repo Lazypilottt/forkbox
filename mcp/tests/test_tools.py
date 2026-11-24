@@ -20,7 +20,7 @@ def call(_tool, **args):
 
 def test_tools_are_listed_with_schemas():
     tools = {t.name: t for t in asyncio.run(srv.server.list_tools())}
-    assert set(tools) == {"create_sandbox", "exec", "read_file", "write_file", "fork", "checkpoint", "rewind", "list_sandboxes", "destroy"}
+    assert set(tools) == {"create_sandbox", "exec", "read_file", "write_file", "fork", "race", "checkpoint", "rewind", "list_sandboxes", "destroy"}
     for t in tools.values():
         assert t.description and len(t.description) > 30, t.name
         for name, prop in t.input_schema.get("properties", {}).items():
@@ -78,3 +78,12 @@ def test_errors_come_back_as_tool_errors(daemon):
     assert err and "NOT_FOUND" in out and "sb-404" in out
     err, out = call("fork", sandbox_id="sb-404", n=0)
     assert err
+
+
+def test_race(daemon):
+    _, out = call("create_sandbox")
+    sid = re.search(r"(sb-\d+)", out).group(1)
+    err, out = call("race", sandbox_id=sid, commands=["true", "false", "true"], check_command="exit 0")
+    assert not err and "passed: continue in sandbox" in out and "attempt 0" in out
+    err, out = call("race", sandbox_id=sid, commands=["true"], check_command="exit 1")
+    assert not err and "No attempt passed" in out

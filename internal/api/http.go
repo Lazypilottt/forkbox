@@ -61,6 +61,10 @@ func NewHTTPHandler(s *Server, tok *Token) http.Handler {
 	mux.HandleFunc("POST /v1/sandboxes/{id}/exec", s.httpExec)
 	mux.HandleFunc("GET /v1/sandboxes/{id}/files", s.httpReadFile)
 	mux.HandleFunc("PUT /v1/sandboxes/{id}/files", s.httpWriteFile)
+	mux.HandleFunc("GET /v1/pools", func(w http.ResponseWriter, r *http.Request) {
+		out, err := s.PoolStats(r.Context(), &pb.PoolStatsRequest{})
+		writeProto(w, out, err)
+	})
 	mux.HandleFunc("POST /v1/sandboxes/{id}/fork", func(w http.ResponseWriter, r *http.Request) {
 		var req pb.ForkSandboxRequest
 		if err := readProto(r, &req); err != nil {

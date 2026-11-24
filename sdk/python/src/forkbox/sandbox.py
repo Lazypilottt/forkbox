@@ -96,6 +96,7 @@ class CreateTimings:
     resume_ms: float
     agent_ms: float
     identity_ms: float
+    from_pool: bool = False  # a warm pool's paused sandbox was resumed
 
 
 def _argv(cmd: str | Sequence[str]) -> list[str]:
@@ -216,7 +217,7 @@ class Sandbox:
         if m.HasField("timings"):
             t = CreateTimings(
                 m.timings.total_ms, m.timings.disk_ms, m.timings.restore_ms,
-                m.timings.resume_ms, m.timings.agent_ms, m.timings.identity_ms,
+                m.timings.resume_ms, m.timings.agent_ms, m.timings.identity_ms, m.timings.from_pool,
             )
         return cls(
             id=m.id, template=m.template, template_id=m.template_id, state=m.state, pid=m.pid,
@@ -372,6 +373,20 @@ class Sandbox:
     def delete_checkpoint(self, name: str) -> None:
         self._call("DeleteCheckpoint", pb.DeleteCheckpointRequest(sandbox_id=self.id, name=name))
 
+    def race(self, n: int, run, check, timeout: float | None = None) -> RaceResult:
+        """Fork into ``n`` children and call ``run(child, i)`` in each at
+        once. As attempts finish, ``check(child)`` decides; the first child
+        that passes is returned and every other child is destroyed, which
+        stops its work. The report lists every attempt. With no winner (or
+        after ``timeout`` seconds) all children are destroyed."""
+        return _sandbox_race(self, n, run, check, timeout)
+
+    def map(self, n: int, run, *, timeout: float | None = None, keep: bool = False) -> list[Attempt]:
+        """Fork into ``n`` children, call ``run(child, i)`` in each at once and
+        return every attempt with its result. Children are destroyed after,
+        unless ``keep``."""
+        return _sandbox_map(self, n, run, timeout=timeout, keep=keep)
+
     def expose(self, port: int, host_port: int = 0) -> tuple[str, int]:
         """Forward a host TCP port to ``port`` in the guest (for previews).
         Returns the ``(host, port)`` the forward listens on."""
@@ -404,3 +419,109 @@ class Sandbox:
 
     def __exit__(self, *exc: object) -> None:
         self.destroy()
+
+
+# ---------------------------------------------------------------- race / map
+
+
+@dataclass(frozen=True)
+class Attempt:
+    """One child's attempt in :meth:`Sandbox.race` or :meth:`Sandbox.map`."""
+
+    index: int
+    sandbox_id: str
+    duration_s: float
+    passed: bool = False
+    result: object = None
+    error: str | None = None  # the exception run() or check() raised
+    cancelled: bool = False  # stopped because another attempt won (or timeout)
+
+
+@dataclass
+class RaceResult:
+    winner: Sandbox | None
+    index: int | None
+    attempts: list[Attempt]
+    fork: ForkTimings | None = None
+
+
+def _race(parent: Sandbox, n: int, run, check, timeout: float | None, keep_all: bool) -> RaceResult:
+    import concurrent.futures as cf
+    import time
+
+    kids = parent.fork(n)
+    started = time.monotonic()
+    attempts: list[Attempt | None] = [None] * n
+
+    def attempt(i: int) -> tuple[object, str | None, float]:
+        t0 = time.monotonic()
+        try:
+            return run(kids[i], i), None, time.monotonic() - t0
+        except Exception as e:  # noqa: BLE001 - reported per attempt
+            return None, f"{type(e).__name__}: {e}", time.monotonic() - t0
+
+    winner: int | None = None
+    pool = cf.ThreadPoolExecutor(max_workers=n)
+    futs = {pool.submit(attempt, i): i for i in range(n)}
+    try:
+        for fut in cf.as_completed(futs, timeout=timeout):
+            i = futs[fut]
+            result, err, dur = fut.result()
+            passed = False
+            if err is None and check is not None:
+                try:
+                    passed = bool(check(kids[i]))
+                except Exception as e:  # noqa: BLE001
+                    err = f"check: {type(e).__name__}: {e}"
+            attempts[i] = Attempt(i, kids[i].id, dur, passed, result, err)
+            if passed and not keep_all:
+                winner = i
+                break
+    except cf.TimeoutError:
+        pass
+    finally:
+        if not keep_all:
+            # Destroying a child ends its running work: its exec streams fail.
+            losers = [k for j, k in enumerate(kids) if j != winner]
+            list(cf.ThreadPoolExecutor(max_workers=max(1, len(losers))).map(lambda k: k.destroy(), losers))
+        pool.shutdown(wait=True)
+    for i in range(n):
+        if attempts[i] is None:
+            attempts[i] = Attempt(i, kids[i].id, time.monotonic() - started, cancelled=True)
+    return RaceResult(kids[winner] if winner is not None else None, winner, attempts, parent.last_fork)
+
+
+def _sandbox_race(self: Sandbox, n: int, run, check, timeout: float | None = None) -> RaceResult:
+    """Fork into ``n`` children and call ``run(child, i)`` in each at once.
+    As attempts finish, ``check(child)`` decides; the first child that passes
+    is returned and every other child is destroyed (stopping its work). The
+    report lists every attempt: duration, passed, error, cancelled. With no
+    winner (or after ``timeout`` seconds) all children are destroyed."""
+    if check is None:
+        raise ValueError("race needs a check")
+    return _race(self, n, run, check, timeout, keep_all=False)
+
+
+def _sandbox_map(self: Sandbox, n: int, run, *, timeout: float | None = None, keep: bool = False) -> list[Attempt]:
+    """Fork into ``n`` children, call ``run(child, i)`` in each at once and
+    return every attempt with its result. Children are destroyed afterwards
+    unless ``keep`` (then ``Sandbox.get(attempt.sandbox_id)`` finds them)."""
+    r = _race(self, n, run, None, timeout, keep_all=True)
+    if not keep:
+        for a in r.attempts:
+            try:
+                Sandbox.get(a.sandbox_id, client=self._client).destroy()
+            except ForkboxError:
+                pass
+    return r.attempts
+
+
+
+def pool_stats(client: Client | None = None) -> list[dict[str, object]]:
+    """The daemon's warm pools: ready, target, hits, misses, demand."""
+    c = client or default_client()
+    try:
+        r = c.stub.PoolStats(pb.PoolStatsRequest(), metadata=c.metadata)
+    except grpc.RpcError as e:
+        raise from_rpc(e) from None
+    return [{f.name: v for f, v in p.ListFields()} | {"template": p.template} for p in r.pools]

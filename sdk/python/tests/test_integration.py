@@ -79,6 +79,49 @@ def test_ttl_expires():
     pytest.fail("sandbox outlived its TTL")
 
 
+def test_race_twenty_only_thirteen_passes():
+    with Sandbox.create("python", ttl=600) as sb:
+        def run(child, i):
+            child.exec(f"echo {i} > /root/attempt", check=True)
+            return i
+
+        def check(child):
+            return child.exec("test \"$(cat /root/attempt)\" = 13").ok
+
+        r = sb.race(20, run, check, timeout=300)
+        try:
+            assert r.index == 13 and r.winner is not None
+            assert r.winner.exec("cat /root/attempt").stdout.strip() == "13"
+            assert len(r.attempts) == 20 and r.attempts[13].passed
+            # No other child is left running.
+            assert {s.id for s in Sandbox.list()} == {sb.id, r.winner.id}
+            print(f"race: fork {r.fork.total_ms:.0f} ms, winner after {r.attempts[13].duration_s:.2f}s; "
+                  f"{sum(a.cancelled for a in r.attempts)} attempts cancelled")
+        finally:
+            if r.winner:
+                r.winner.destroy()
+
+
+def test_warm_pool():
+    from forkbox import pool_stats
+
+    pools = {p["template"]: p for p in pool_stats()}
+    if "python" not in pools:
+        pytest.skip("the daemon runs without a python warm pool (--warm python=1:8)")
+    deadline = time.monotonic() + 120
+    while pool_stats()[0].get("ready", 0) < 1:
+        if time.monotonic() > deadline:
+            pytest.fail(f"warm pool never filled: {pool_stats()}")
+        time.sleep(0.5)
+    t0 = time.perf_counter()
+    with Sandbox.create("python", ttl=300) as sb:
+        dt = (time.perf_counter() - t0) * 1000
+        assert sb.timings.from_pool, sb.timings
+        assert sb.exec("hostname").stdout.strip() == sb.id
+        print(f"create from the warm pool: {dt:.1f} ms ({sb.timings})")
+    assert sb.id not in {s.id for s in Sandbox.list()}
+
+
 def test_fork():
     with Sandbox.create("python", ttl=300) as sb:
         sb.exec("echo from-parent > /root/state.txt; python -c 'open(\"/root/x\", \"w\").write(\"1\")'", check=True)

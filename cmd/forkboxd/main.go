@@ -63,6 +63,8 @@ func run() error {
 	exposeAddr := flag.String("expose-addr", "127.0.0.1", "host address port forwards listen on")
 	memBackend := flag.String("memory-backend", sandbox.BackendMerge, "how forks keep memory: merge (merged layers) or uffd (page server, layer chains)")
 	prefetch := flag.Bool("prefetch", false, "uffd: page servers copy a fork's dirty pages before the child asks")
+	warm := flag.String("warm", "", "warm pools, e.g. python=1:8,node=0:4 (template=min:max restored, paused sandboxes)")
+	warmBudget := flag.Int("warm-memory-mib", 4096, "memory budget for all warm pools, counting each sandbox at its template's memory size")
 	showVersion := flag.Bool("version", false, "print the version and exit")
 	flag.Parse()
 	if *showVersion {
@@ -136,6 +138,14 @@ func run() error {
 			len(rep.Adopted), rep.Adopted, rep.Resumed, len(rep.Reaped), rep.Reaped, len(rep.Orphans), rep.Orphans)
 	}
 
+	poolCfgs, err := sandbox.ParsePools(*warm)
+	if err != nil {
+		return err
+	}
+	if len(poolCfgs) > 0 {
+		go sbm.StartPools(ctx, poolCfgs, *warmBudget)
+		logger.Printf("warm pools: %v (budget %d MiB)", poolCfgs, *warmBudget)
+	}
 	srv := &api.Server{B: sbm, ExposeHost: *exposeAddr}
 	errc := make(chan error, 4)
 	var closers []func()

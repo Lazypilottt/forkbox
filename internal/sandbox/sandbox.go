@@ -53,6 +53,7 @@ type Manager struct {
 	AgentTimeout time.Duration
 	Log          *log.Logger
 
+	pools     *pools
 	mu        sync.Mutex
 	vms       map[string]*vm.VM         // VMs started by this process
 	listeners map[string][]net.Listener // port forwards, by sandbox
@@ -86,6 +87,9 @@ type Created struct {
 	*store.Sandbox
 	Timings  Timings
 	Identity *Identity
+	FromPool bool // handed out from a warm pool
+
+	warm bool // stop after the restore, paused (filling a warm pool)
 }
 
 // Identity is what the agent did to make the clone unique.
@@ -116,6 +120,12 @@ func (m *Manager) Create(ctx context.Context, o CreateOptions) (*Created, error)
 	tpl, err := template.Get(m.DataDir, o.Template)
 	if err != nil {
 		return nil, err
+	}
+	if o.ID == "" {
+		if c, ok := m.fromPool(ctx, tpl, o.TTL); ok {
+			c.Timings.Total = time.Since(start)
+			return c, nil
+		}
 	}
 	id := o.ID
 	if id == "" {
@@ -158,10 +168,7 @@ func (m *Manager) create(ctx context.Context, tpl *template.Template, rec *store
 		return nil, err
 	}
 	disk := filepath.Join(rec.Dir, DiskFile)
-	if err := storage.Reflink(tpl.Rootfs(), disk); err != nil {
-		if errors.Is(err, storage.ErrNoReflink) {
-			return nil, fmt.Errorf("%w (%v)", ErrNoReflink, err)
-		}
+	if err := reflinkDisk(tpl.Rootfs(), disk); err != nil {
 		return nil, err
 	}
 	c.Timings.Disk = time.Since(t)
@@ -301,7 +308,17 @@ func (m *Manager) Get(ctx context.Context, id string) (*store.Sandbox, error) {
 
 // List returns every sandbox record.
 func (m *Manager) List(ctx context.Context) ([]*store.Sandbox, error) {
-	return m.Store.ListSandboxes(ctx)
+	all, err := m.Store.ListSandboxes(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := all[:0]
+	for _, sb := range all {
+		if sb.State != store.StateWarm { // pool members are not anyone's yet
+			out = append(out, sb)
+		}
+	}
+	return out, nil
 }
 
 // RecoverReport says what Recover did.
@@ -534,4 +551,16 @@ func proxy(c net.Conn, target string) {
 	go cp(c, u)
 	<-done
 	<-done
+}
+
+// reflinkDisk copies a template disk for a sandbox, failing clearly where
+// the filesystem cannot reflink.
+func reflinkDisk(src, dst string) error {
+	if err := storage.Reflink(src, dst); err != nil {
+		if errors.Is(err, storage.ErrNoReflink) {
+			return fmt.Errorf("%w (%v)", ErrNoReflink, err)
+		}
+		return err
+	}
+	return nil
 }

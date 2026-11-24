@@ -34,6 +34,186 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type PoolStatsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PoolStatsRequest) Reset() {
+	*x = PoolStatsRequest{}
+	mi := &file_forkbox_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PoolStatsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PoolStatsRequest) ProtoMessage() {}
+
+func (x *PoolStatsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_forkbox_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PoolStatsRequest.ProtoReflect.Descriptor instead.
+func (*PoolStatsRequest) Descriptor() ([]byte, []int) {
+	return file_forkbox_proto_rawDescGZIP(), []int{0}
+}
+
+type PoolStat struct {
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	Template            string                 `protobuf:"bytes,1,opt,name=template,proto3" json:"template,omitempty"`
+	Ready               uint32                 `protobuf:"varint,2,opt,name=ready,proto3" json:"ready,omitempty"`
+	Target              uint32                 `protobuf:"varint,3,opt,name=target,proto3" json:"target,omitempty"`
+	Hits                uint64                 `protobuf:"varint,4,opt,name=hits,proto3" json:"hits,omitempty"`
+	Misses              uint64                 `protobuf:"varint,5,opt,name=misses,proto3" json:"misses,omitempty"`
+	Demand_10M          uint32                 `protobuf:"varint,6,opt,name=demand_10m,json=demand10m,proto3" json:"demand_10m,omitempty"` // creates of this template in the last 10 minutes
+	MemoryMibPerSandbox uint32                 `protobuf:"varint,7,opt,name=memory_mib_per_sandbox,json=memoryMibPerSandbox,proto3" json:"memory_mib_per_sandbox,omitempty"`
+	LastError           string                 `protobuf:"bytes,8,opt,name=last_error,json=lastError,proto3" json:"last_error,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
+}
+
+func (x *PoolStat) Reset() {
+	*x = PoolStat{}
+	mi := &file_forkbox_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PoolStat) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PoolStat) ProtoMessage() {}
+
+func (x *PoolStat) ProtoReflect() protoreflect.Message {
+	mi := &file_forkbox_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PoolStat.ProtoReflect.Descriptor instead.
+func (*PoolStat) Descriptor() ([]byte, []int) {
+	return file_forkbox_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *PoolStat) GetTemplate() string {
+	if x != nil {
+		return x.Template
+	}
+	return ""
+}
+
+func (x *PoolStat) GetReady() uint32 {
+	if x != nil {
+		return x.Ready
+	}
+	return 0
+}
+
+func (x *PoolStat) GetTarget() uint32 {
+	if x != nil {
+		return x.Target
+	}
+	return 0
+}
+
+func (x *PoolStat) GetHits() uint64 {
+	if x != nil {
+		return x.Hits
+	}
+	return 0
+}
+
+func (x *PoolStat) GetMisses() uint64 {
+	if x != nil {
+		return x.Misses
+	}
+	return 0
+}
+
+func (x *PoolStat) GetDemand_10M() uint32 {
+	if x != nil {
+		return x.Demand_10M
+	}
+	return 0
+}
+
+func (x *PoolStat) GetMemoryMibPerSandbox() uint32 {
+	if x != nil {
+		return x.MemoryMibPerSandbox
+	}
+	return 0
+}
+
+func (x *PoolStat) GetLastError() string {
+	if x != nil {
+		return x.LastError
+	}
+	return ""
+}
+
+type PoolStatsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Pools         []*PoolStat            `protobuf:"bytes,1,rep,name=pools,proto3" json:"pools,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PoolStatsResponse) Reset() {
+	*x = PoolStatsResponse{}
+	mi := &file_forkbox_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PoolStatsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PoolStatsResponse) ProtoMessage() {}
+
+func (x *PoolStatsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_forkbox_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PoolStatsResponse.ProtoReflect.Descriptor instead.
+func (*PoolStatsResponse) Descriptor() ([]byte, []int) {
+	return file_forkbox_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *PoolStatsResponse) GetPools() []*PoolStat {
+	if x != nil {
+		return x.Pools
+	}
+	return nil
+}
+
 type Sandbox struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
 	Id              string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -52,7 +232,7 @@ type Sandbox struct {
 
 func (x *Sandbox) Reset() {
 	*x = Sandbox{}
-	mi := &file_forkbox_proto_msgTypes[0]
+	mi := &file_forkbox_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -64,7 +244,7 @@ func (x *Sandbox) String() string {
 func (*Sandbox) ProtoMessage() {}
 
 func (x *Sandbox) ProtoReflect() protoreflect.Message {
-	mi := &file_forkbox_proto_msgTypes[0]
+	mi := &file_forkbox_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -77,7 +257,7 @@ func (x *Sandbox) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Sandbox.ProtoReflect.Descriptor instead.
 func (*Sandbox) Descriptor() ([]byte, []int) {
-	return file_forkbox_proto_rawDescGZIP(), []int{0}
+	return file_forkbox_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *Sandbox) GetId() string {
@@ -168,7 +348,7 @@ type PagerStats struct {
 
 func (x *PagerStats) Reset() {
 	*x = PagerStats{}
-	mi := &file_forkbox_proto_msgTypes[1]
+	mi := &file_forkbox_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -180,7 +360,7 @@ func (x *PagerStats) String() string {
 func (*PagerStats) ProtoMessage() {}
 
 func (x *PagerStats) ProtoReflect() protoreflect.Message {
-	mi := &file_forkbox_proto_msgTypes[1]
+	mi := &file_forkbox_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -193,7 +373,7 @@ func (x *PagerStats) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PagerStats.ProtoReflect.Descriptor instead.
 func (*PagerStats) Descriptor() ([]byte, []int) {
-	return file_forkbox_proto_rawDescGZIP(), []int{1}
+	return file_forkbox_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *PagerStats) GetFaults() uint64 {
@@ -260,13 +440,14 @@ type CreateTimings struct {
 	ResumeMs      float64                `protobuf:"fixed64,4,opt,name=resume_ms,json=resumeMs,proto3" json:"resume_ms,omitempty"`
 	AgentMs       float64                `protobuf:"fixed64,5,opt,name=agent_ms,json=agentMs,proto3" json:"agent_ms,omitempty"`          // until the guest agent answered
 	IdentityMs    float64                `protobuf:"fixed64,6,opt,name=identity_ms,json=identityMs,proto3" json:"identity_ms,omitempty"` // reseed, machine-id, hostname, clock
+	FromPool      bool                   `protobuf:"varint,7,opt,name=from_pool,json=fromPool,proto3" json:"from_pool,omitempty"`        // a warm pool's sandbox was handed out
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *CreateTimings) Reset() {
 	*x = CreateTimings{}
-	mi := &file_forkbox_proto_msgTypes[2]
+	mi := &file_forkbox_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -278,7 +459,7 @@ func (x *CreateTimings) String() string {
 func (*CreateTimings) ProtoMessage() {}
 
 func (x *CreateTimings) ProtoReflect() protoreflect.Message {
-	mi := &file_forkbox_proto_msgTypes[2]
+	mi := &file_forkbox_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -291,7 +472,7 @@ func (x *CreateTimings) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateTimings.ProtoReflect.Descriptor instead.
 func (*CreateTimings) Descriptor() ([]byte, []int) {
-	return file_forkbox_proto_rawDescGZIP(), []int{2}
+	return file_forkbox_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *CreateTimings) GetTotalMs() float64 {
@@ -336,6 +517,13 @@ func (x *CreateTimings) GetIdentityMs() float64 {
 	return 0
 }
 
+func (x *CreateTimings) GetFromPool() bool {
+	if x != nil {
+		return x.FromPool
+	}
+	return false
+}
+
 type CreateSandboxRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Template      string                 `protobuf:"bytes,1,opt,name=template,proto3" json:"template,omitempty"` // name or id
@@ -346,7 +534,7 @@ type CreateSandboxRequest struct {
 
 func (x *CreateSandboxRequest) Reset() {
 	*x = CreateSandboxRequest{}
-	mi := &file_forkbox_proto_msgTypes[3]
+	mi := &file_forkbox_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -358,7 +546,7 @@ func (x *CreateSandboxRequest) String() string {
 func (*CreateSandboxRequest) ProtoMessage() {}
 
 func (x *CreateSandboxRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_forkbox_proto_msgTypes[3]
+	mi := &file_forkbox_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -371,7 +559,7 @@ func (x *CreateSandboxRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateSandboxRequest.ProtoReflect.Descriptor instead.
 func (*CreateSandboxRequest) Descriptor() ([]byte, []int) {
-	return file_forkbox_proto_rawDescGZIP(), []int{3}
+	return file_forkbox_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *CreateSandboxRequest) GetTemplate() string {
@@ -397,7 +585,7 @@ type GetSandboxRequest struct {
 
 func (x *GetSandboxRequest) Reset() {
 	*x = GetSandboxRequest{}
-	mi := &file_forkbox_proto_msgTypes[4]
+	mi := &file_forkbox_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -409,7 +597,7 @@ func (x *GetSandboxRequest) String() string {
 func (*GetSandboxRequest) ProtoMessage() {}
 
 func (x *GetSandboxRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_forkbox_proto_msgTypes[4]
+	mi := &file_forkbox_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -422,7 +610,7 @@ func (x *GetSandboxRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSandboxRequest.ProtoReflect.Descriptor instead.
 func (*GetSandboxRequest) Descriptor() ([]byte, []int) {
-	return file_forkbox_proto_rawDescGZIP(), []int{4}
+	return file_forkbox_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *GetSandboxRequest) GetId() string {
@@ -440,7 +628,7 @@ type ListSandboxesRequest struct {
 
 func (x *ListSandboxesRequest) Reset() {
 	*x = ListSandboxesRequest{}
-	mi := &file_forkbox_proto_msgTypes[5]
+	mi := &file_forkbox_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -452,7 +640,7 @@ func (x *ListSandboxesRequest) String() string {
 func (*ListSandboxesRequest) ProtoMessage() {}
 
 func (x *ListSandboxesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_forkbox_proto_msgTypes[5]
+	mi := &file_forkbox_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -465,7 +653,7 @@ func (x *ListSandboxesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSandboxesRequest.ProtoReflect.Descriptor instead.
 func (*ListSandboxesRequest) Descriptor() ([]byte, []int) {
-	return file_forkbox_proto_rawDescGZIP(), []int{5}
+	return file_forkbox_proto_rawDescGZIP(), []int{8}
 }
 
 type ListSandboxesResponse struct {
@@ -477,7 +665,7 @@ type ListSandboxesResponse struct {
 
 func (x *ListSandboxesResponse) Reset() {
 	*x = ListSandboxesResponse{}
-	mi := &file_forkbox_proto_msgTypes[6]
+	mi := &file_forkbox_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -489,7 +677,7 @@ func (x *ListSandboxesResponse) String() string {
 func (*ListSandboxesResponse) ProtoMessage() {}
 
 func (x *ListSandboxesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_forkbox_proto_msgTypes[6]
+	mi := &file_forkbox_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -502,7 +690,7 @@ func (x *ListSandboxesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSandboxesResponse.ProtoReflect.Descriptor instead.
 func (*ListSandboxesResponse) Descriptor() ([]byte, []int) {
-	return file_forkbox_proto_rawDescGZIP(), []int{6}
+	return file_forkbox_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *ListSandboxesResponse) GetSandboxes() []*Sandbox {
@@ -525,7 +713,7 @@ type ExecRequest struct {
 
 func (x *ExecRequest) Reset() {
 	*x = ExecRequest{}
-	mi := &file_forkbox_proto_msgTypes[7]
+	mi := &file_forkbox_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -537,7 +725,7 @@ func (x *ExecRequest) String() string {
 func (*ExecRequest) ProtoMessage() {}
 
 func (x *ExecRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_forkbox_proto_msgTypes[7]
+	mi := &file_forkbox_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -550,7 +738,7 @@ func (x *ExecRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExecRequest.ProtoReflect.Descriptor instead.
 func (*ExecRequest) Descriptor() ([]byte, []int) {
-	return file_forkbox_proto_rawDescGZIP(), []int{7}
+	return file_forkbox_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *ExecRequest) GetSandboxId() string {
@@ -603,7 +791,7 @@ type ExecEvent struct {
 
 func (x *ExecEvent) Reset() {
 	*x = ExecEvent{}
-	mi := &file_forkbox_proto_msgTypes[8]
+	mi := &file_forkbox_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -615,7 +803,7 @@ func (x *ExecEvent) String() string {
 func (*ExecEvent) ProtoMessage() {}
 
 func (x *ExecEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_forkbox_proto_msgTypes[8]
+	mi := &file_forkbox_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -628,7 +816,7 @@ func (x *ExecEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExecEvent.ProtoReflect.Descriptor instead.
 func (*ExecEvent) Descriptor() ([]byte, []int) {
-	return file_forkbox_proto_rawDescGZIP(), []int{8}
+	return file_forkbox_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *ExecEvent) GetEvent() isExecEvent_Event {
@@ -712,7 +900,7 @@ type ExecStarted struct {
 
 func (x *ExecStarted) Reset() {
 	*x = ExecStarted{}
-	mi := &file_forkbox_proto_msgTypes[9]
+	mi := &file_forkbox_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -724,7 +912,7 @@ func (x *ExecStarted) String() string {
 func (*ExecStarted) ProtoMessage() {}
 
 func (x *ExecStarted) ProtoReflect() protoreflect.Message {
-	mi := &file_forkbox_proto_msgTypes[9]
+	mi := &file_forkbox_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -737,7 +925,7 @@ func (x *ExecStarted) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExecStarted.ProtoReflect.Descriptor instead.
 func (*ExecStarted) Descriptor() ([]byte, []int) {
-	return file_forkbox_proto_rawDescGZIP(), []int{9}
+	return file_forkbox_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *ExecStarted) GetExecId() string {
@@ -766,7 +954,7 @@ type ExecExit struct {
 
 func (x *ExecExit) Reset() {
 	*x = ExecExit{}
-	mi := &file_forkbox_proto_msgTypes[10]
+	mi := &file_forkbox_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -778,7 +966,7 @@ func (x *ExecExit) String() string {
 func (*ExecExit) ProtoMessage() {}
 
 func (x *ExecExit) ProtoReflect() protoreflect.Message {
-	mi := &file_forkbox_proto_msgTypes[10]
+	mi := &file_forkbox_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -791,7 +979,7 @@ func (x *ExecExit) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExecExit.ProtoReflect.Descriptor instead.
 func (*ExecExit) Descriptor() ([]byte, []int) {
-	return file_forkbox_proto_rawDescGZIP(), []int{10}
+	return file_forkbox_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *ExecExit) GetExitCode() int32 {
@@ -832,7 +1020,7 @@ type ReadFileRequest struct {
 
 func (x *ReadFileRequest) Reset() {
 	*x = ReadFileRequest{}
-	mi := &file_forkbox_proto_msgTypes[11]
+	mi := &file_forkbox_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -844,7 +1032,7 @@ func (x *ReadFileRequest) String() string {
 func (*ReadFileRequest) ProtoMessage() {}
 
 func (x *ReadFileRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_forkbox_proto_msgTypes[11]
+	mi := &file_forkbox_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -857,7 +1045,7 @@ func (x *ReadFileRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReadFileRequest.ProtoReflect.Descriptor instead.
 func (*ReadFileRequest) Descriptor() ([]byte, []int) {
-	return file_forkbox_proto_rawDescGZIP(), []int{11}
+	return file_forkbox_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *ReadFileRequest) GetSandboxId() string {
@@ -886,7 +1074,7 @@ type FileChunk struct {
 
 func (x *FileChunk) Reset() {
 	*x = FileChunk{}
-	mi := &file_forkbox_proto_msgTypes[12]
+	mi := &file_forkbox_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -898,7 +1086,7 @@ func (x *FileChunk) String() string {
 func (*FileChunk) ProtoMessage() {}
 
 func (x *FileChunk) ProtoReflect() protoreflect.Message {
-	mi := &file_forkbox_proto_msgTypes[12]
+	mi := &file_forkbox_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -911,7 +1099,7 @@ func (x *FileChunk) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FileChunk.ProtoReflect.Descriptor instead.
 func (*FileChunk) Descriptor() ([]byte, []int) {
-	return file_forkbox_proto_rawDescGZIP(), []int{12}
+	return file_forkbox_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *FileChunk) GetData() []byte {
@@ -954,7 +1142,7 @@ type WriteFileHeader struct {
 
 func (x *WriteFileHeader) Reset() {
 	*x = WriteFileHeader{}
-	mi := &file_forkbox_proto_msgTypes[13]
+	mi := &file_forkbox_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -966,7 +1154,7 @@ func (x *WriteFileHeader) String() string {
 func (*WriteFileHeader) ProtoMessage() {}
 
 func (x *WriteFileHeader) ProtoReflect() protoreflect.Message {
-	mi := &file_forkbox_proto_msgTypes[13]
+	mi := &file_forkbox_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -979,7 +1167,7 @@ func (x *WriteFileHeader) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WriteFileHeader.ProtoReflect.Descriptor instead.
 func (*WriteFileHeader) Descriptor() ([]byte, []int) {
-	return file_forkbox_proto_rawDescGZIP(), []int{13}
+	return file_forkbox_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *WriteFileHeader) GetSandboxId() string {
@@ -1023,7 +1211,7 @@ type WriteFileRequest struct {
 
 func (x *WriteFileRequest) Reset() {
 	*x = WriteFileRequest{}
-	mi := &file_forkbox_proto_msgTypes[14]
+	mi := &file_forkbox_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1035,7 +1223,7 @@ func (x *WriteFileRequest) String() string {
 func (*WriteFileRequest) ProtoMessage() {}
 
 func (x *WriteFileRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_forkbox_proto_msgTypes[14]
+	mi := &file_forkbox_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1048,7 +1236,7 @@ func (x *WriteFileRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WriteFileRequest.ProtoReflect.Descriptor instead.
 func (*WriteFileRequest) Descriptor() ([]byte, []int) {
-	return file_forkbox_proto_rawDescGZIP(), []int{14}
+	return file_forkbox_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *WriteFileRequest) GetMsg() isWriteFileRequest_Msg {
@@ -1102,7 +1290,7 @@ type WriteFileResponse struct {
 
 func (x *WriteFileResponse) Reset() {
 	*x = WriteFileResponse{}
-	mi := &file_forkbox_proto_msgTypes[15]
+	mi := &file_forkbox_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1114,7 +1302,7 @@ func (x *WriteFileResponse) String() string {
 func (*WriteFileResponse) ProtoMessage() {}
 
 func (x *WriteFileResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_forkbox_proto_msgTypes[15]
+	mi := &file_forkbox_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1127,7 +1315,7 @@ func (x *WriteFileResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WriteFileResponse.ProtoReflect.Descriptor instead.
 func (*WriteFileResponse) Descriptor() ([]byte, []int) {
-	return file_forkbox_proto_rawDescGZIP(), []int{15}
+	return file_forkbox_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *WriteFileResponse) GetSize() uint64 {
@@ -1153,7 +1341,7 @@ type DestroySandboxRequest struct {
 
 func (x *DestroySandboxRequest) Reset() {
 	*x = DestroySandboxRequest{}
-	mi := &file_forkbox_proto_msgTypes[16]
+	mi := &file_forkbox_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1165,7 +1353,7 @@ func (x *DestroySandboxRequest) String() string {
 func (*DestroySandboxRequest) ProtoMessage() {}
 
 func (x *DestroySandboxRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_forkbox_proto_msgTypes[16]
+	mi := &file_forkbox_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1178,7 +1366,7 @@ func (x *DestroySandboxRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DestroySandboxRequest.ProtoReflect.Descriptor instead.
 func (*DestroySandboxRequest) Descriptor() ([]byte, []int) {
-	return file_forkbox_proto_rawDescGZIP(), []int{16}
+	return file_forkbox_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *DestroySandboxRequest) GetId() string {
@@ -1196,7 +1384,7 @@ type DestroySandboxResponse struct {
 
 func (x *DestroySandboxResponse) Reset() {
 	*x = DestroySandboxResponse{}
-	mi := &file_forkbox_proto_msgTypes[17]
+	mi := &file_forkbox_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1208,7 +1396,7 @@ func (x *DestroySandboxResponse) String() string {
 func (*DestroySandboxResponse) ProtoMessage() {}
 
 func (x *DestroySandboxResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_forkbox_proto_msgTypes[17]
+	mi := &file_forkbox_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1221,7 +1409,7 @@ func (x *DestroySandboxResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DestroySandboxResponse.ProtoReflect.Descriptor instead.
 func (*DestroySandboxResponse) Descriptor() ([]byte, []int) {
-	return file_forkbox_proto_rawDescGZIP(), []int{17}
+	return file_forkbox_proto_rawDescGZIP(), []int{20}
 }
 
 type ExposePortRequest struct {
@@ -1235,7 +1423,7 @@ type ExposePortRequest struct {
 
 func (x *ExposePortRequest) Reset() {
 	*x = ExposePortRequest{}
-	mi := &file_forkbox_proto_msgTypes[18]
+	mi := &file_forkbox_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1247,7 +1435,7 @@ func (x *ExposePortRequest) String() string {
 func (*ExposePortRequest) ProtoMessage() {}
 
 func (x *ExposePortRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_forkbox_proto_msgTypes[18]
+	mi := &file_forkbox_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1260,7 +1448,7 @@ func (x *ExposePortRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExposePortRequest.ProtoReflect.Descriptor instead.
 func (*ExposePortRequest) Descriptor() ([]byte, []int) {
-	return file_forkbox_proto_rawDescGZIP(), []int{18}
+	return file_forkbox_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *ExposePortRequest) GetSandboxId() string {
@@ -1297,7 +1485,7 @@ type ForkSandboxRequest struct {
 
 func (x *ForkSandboxRequest) Reset() {
 	*x = ForkSandboxRequest{}
-	mi := &file_forkbox_proto_msgTypes[19]
+	mi := &file_forkbox_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1309,7 +1497,7 @@ func (x *ForkSandboxRequest) String() string {
 func (*ForkSandboxRequest) ProtoMessage() {}
 
 func (x *ForkSandboxRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_forkbox_proto_msgTypes[19]
+	mi := &file_forkbox_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1322,7 +1510,7 @@ func (x *ForkSandboxRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ForkSandboxRequest.ProtoReflect.Descriptor instead.
 func (*ForkSandboxRequest) Descriptor() ([]byte, []int) {
-	return file_forkbox_proto_rawDescGZIP(), []int{19}
+	return file_forkbox_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *ForkSandboxRequest) GetId() string {
@@ -1378,7 +1566,7 @@ type ForkTimings struct {
 
 func (x *ForkTimings) Reset() {
 	*x = ForkTimings{}
-	mi := &file_forkbox_proto_msgTypes[20]
+	mi := &file_forkbox_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1390,7 +1578,7 @@ func (x *ForkTimings) String() string {
 func (*ForkTimings) ProtoMessage() {}
 
 func (x *ForkTimings) ProtoReflect() protoreflect.Message {
-	mi := &file_forkbox_proto_msgTypes[20]
+	mi := &file_forkbox_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1403,7 +1591,7 @@ func (x *ForkTimings) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ForkTimings.ProtoReflect.Descriptor instead.
 func (*ForkTimings) Descriptor() ([]byte, []int) {
-	return file_forkbox_proto_rawDescGZIP(), []int{20}
+	return file_forkbox_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *ForkTimings) GetPauseMs() float64 {
@@ -1488,7 +1676,7 @@ type ForkSandboxResponse struct {
 
 func (x *ForkSandboxResponse) Reset() {
 	*x = ForkSandboxResponse{}
-	mi := &file_forkbox_proto_msgTypes[21]
+	mi := &file_forkbox_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1500,7 +1688,7 @@ func (x *ForkSandboxResponse) String() string {
 func (*ForkSandboxResponse) ProtoMessage() {}
 
 func (x *ForkSandboxResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_forkbox_proto_msgTypes[21]
+	mi := &file_forkbox_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1513,7 +1701,7 @@ func (x *ForkSandboxResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ForkSandboxResponse.ProtoReflect.Descriptor instead.
 func (*ForkSandboxResponse) Descriptor() ([]byte, []int) {
-	return file_forkbox_proto_rawDescGZIP(), []int{21}
+	return file_forkbox_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *ForkSandboxResponse) GetChildren() []*Sandbox {
@@ -1559,7 +1747,7 @@ type Checkpoint struct {
 
 func (x *Checkpoint) Reset() {
 	*x = Checkpoint{}
-	mi := &file_forkbox_proto_msgTypes[22]
+	mi := &file_forkbox_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1571,7 +1759,7 @@ func (x *Checkpoint) String() string {
 func (*Checkpoint) ProtoMessage() {}
 
 func (x *Checkpoint) ProtoReflect() protoreflect.Message {
-	mi := &file_forkbox_proto_msgTypes[22]
+	mi := &file_forkbox_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1584,7 +1772,7 @@ func (x *Checkpoint) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Checkpoint.ProtoReflect.Descriptor instead.
 func (*Checkpoint) Descriptor() ([]byte, []int) {
-	return file_forkbox_proto_rawDescGZIP(), []int{22}
+	return file_forkbox_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *Checkpoint) GetId() string {
@@ -1646,7 +1834,7 @@ type CreateCheckpointRequest struct {
 
 func (x *CreateCheckpointRequest) Reset() {
 	*x = CreateCheckpointRequest{}
-	mi := &file_forkbox_proto_msgTypes[23]
+	mi := &file_forkbox_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1658,7 +1846,7 @@ func (x *CreateCheckpointRequest) String() string {
 func (*CreateCheckpointRequest) ProtoMessage() {}
 
 func (x *CreateCheckpointRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_forkbox_proto_msgTypes[23]
+	mi := &file_forkbox_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1671,7 +1859,7 @@ func (x *CreateCheckpointRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateCheckpointRequest.ProtoReflect.Descriptor instead.
 func (*CreateCheckpointRequest) Descriptor() ([]byte, []int) {
-	return file_forkbox_proto_rawDescGZIP(), []int{23}
+	return file_forkbox_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *CreateCheckpointRequest) GetSandboxId() string {
@@ -1697,7 +1885,7 @@ type ListCheckpointsRequest struct {
 
 func (x *ListCheckpointsRequest) Reset() {
 	*x = ListCheckpointsRequest{}
-	mi := &file_forkbox_proto_msgTypes[24]
+	mi := &file_forkbox_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1709,7 +1897,7 @@ func (x *ListCheckpointsRequest) String() string {
 func (*ListCheckpointsRequest) ProtoMessage() {}
 
 func (x *ListCheckpointsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_forkbox_proto_msgTypes[24]
+	mi := &file_forkbox_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1722,7 +1910,7 @@ func (x *ListCheckpointsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListCheckpointsRequest.ProtoReflect.Descriptor instead.
 func (*ListCheckpointsRequest) Descriptor() ([]byte, []int) {
-	return file_forkbox_proto_rawDescGZIP(), []int{24}
+	return file_forkbox_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *ListCheckpointsRequest) GetSandboxId() string {
@@ -1741,7 +1929,7 @@ type ListCheckpointsResponse struct {
 
 func (x *ListCheckpointsResponse) Reset() {
 	*x = ListCheckpointsResponse{}
-	mi := &file_forkbox_proto_msgTypes[25]
+	mi := &file_forkbox_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1753,7 +1941,7 @@ func (x *ListCheckpointsResponse) String() string {
 func (*ListCheckpointsResponse) ProtoMessage() {}
 
 func (x *ListCheckpointsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_forkbox_proto_msgTypes[25]
+	mi := &file_forkbox_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1766,7 +1954,7 @@ func (x *ListCheckpointsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListCheckpointsResponse.ProtoReflect.Descriptor instead.
 func (*ListCheckpointsResponse) Descriptor() ([]byte, []int) {
-	return file_forkbox_proto_rawDescGZIP(), []int{25}
+	return file_forkbox_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *ListCheckpointsResponse) GetCheckpoints() []*Checkpoint {
@@ -1786,7 +1974,7 @@ type RewindSandboxRequest struct {
 
 func (x *RewindSandboxRequest) Reset() {
 	*x = RewindSandboxRequest{}
-	mi := &file_forkbox_proto_msgTypes[26]
+	mi := &file_forkbox_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1798,7 +1986,7 @@ func (x *RewindSandboxRequest) String() string {
 func (*RewindSandboxRequest) ProtoMessage() {}
 
 func (x *RewindSandboxRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_forkbox_proto_msgTypes[26]
+	mi := &file_forkbox_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1811,7 +1999,7 @@ func (x *RewindSandboxRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RewindSandboxRequest.ProtoReflect.Descriptor instead.
 func (*RewindSandboxRequest) Descriptor() ([]byte, []int) {
-	return file_forkbox_proto_rawDescGZIP(), []int{26}
+	return file_forkbox_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *RewindSandboxRequest) GetSandboxId() string {
@@ -1839,7 +2027,7 @@ type RestoreCheckpointRequest struct {
 
 func (x *RestoreCheckpointRequest) Reset() {
 	*x = RestoreCheckpointRequest{}
-	mi := &file_forkbox_proto_msgTypes[27]
+	mi := &file_forkbox_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1851,7 +2039,7 @@ func (x *RestoreCheckpointRequest) String() string {
 func (*RestoreCheckpointRequest) ProtoMessage() {}
 
 func (x *RestoreCheckpointRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_forkbox_proto_msgTypes[27]
+	mi := &file_forkbox_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1864,7 +2052,7 @@ func (x *RestoreCheckpointRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RestoreCheckpointRequest.ProtoReflect.Descriptor instead.
 func (*RestoreCheckpointRequest) Descriptor() ([]byte, []int) {
-	return file_forkbox_proto_rawDescGZIP(), []int{27}
+	return file_forkbox_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *RestoreCheckpointRequest) GetSandboxId() string {
@@ -1898,7 +2086,7 @@ type DeleteCheckpointRequest struct {
 
 func (x *DeleteCheckpointRequest) Reset() {
 	*x = DeleteCheckpointRequest{}
-	mi := &file_forkbox_proto_msgTypes[28]
+	mi := &file_forkbox_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1910,7 +2098,7 @@ func (x *DeleteCheckpointRequest) String() string {
 func (*DeleteCheckpointRequest) ProtoMessage() {}
 
 func (x *DeleteCheckpointRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_forkbox_proto_msgTypes[28]
+	mi := &file_forkbox_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1923,7 +2111,7 @@ func (x *DeleteCheckpointRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteCheckpointRequest.ProtoReflect.Descriptor instead.
 func (*DeleteCheckpointRequest) Descriptor() ([]byte, []int) {
-	return file_forkbox_proto_rawDescGZIP(), []int{28}
+	return file_forkbox_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *DeleteCheckpointRequest) GetSandboxId() string {
@@ -1948,7 +2136,7 @@ type DeleteCheckpointResponse struct {
 
 func (x *DeleteCheckpointResponse) Reset() {
 	*x = DeleteCheckpointResponse{}
-	mi := &file_forkbox_proto_msgTypes[29]
+	mi := &file_forkbox_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1960,7 +2148,7 @@ func (x *DeleteCheckpointResponse) String() string {
 func (*DeleteCheckpointResponse) ProtoMessage() {}
 
 func (x *DeleteCheckpointResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_forkbox_proto_msgTypes[29]
+	mi := &file_forkbox_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1973,7 +2161,7 @@ func (x *DeleteCheckpointResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteCheckpointResponse.ProtoReflect.Descriptor instead.
 func (*DeleteCheckpointResponse) Descriptor() ([]byte, []int) {
-	return file_forkbox_proto_rawDescGZIP(), []int{29}
+	return file_forkbox_proto_rawDescGZIP(), []int{32}
 }
 
 type ExposePortResponse struct {
@@ -1986,7 +2174,7 @@ type ExposePortResponse struct {
 
 func (x *ExposePortResponse) Reset() {
 	*x = ExposePortResponse{}
-	mi := &file_forkbox_proto_msgTypes[30]
+	mi := &file_forkbox_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1998,7 +2186,7 @@ func (x *ExposePortResponse) String() string {
 func (*ExposePortResponse) ProtoMessage() {}
 
 func (x *ExposePortResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_forkbox_proto_msgTypes[30]
+	mi := &file_forkbox_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2011,7 +2199,7 @@ func (x *ExposePortResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExposePortResponse.ProtoReflect.Descriptor instead.
 func (*ExposePortResponse) Descriptor() ([]byte, []int) {
-	return file_forkbox_proto_rawDescGZIP(), []int{30}
+	return file_forkbox_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *ExposePortResponse) GetHost() string {
@@ -2033,7 +2221,21 @@ var File_forkbox_proto protoreflect.FileDescriptor
 const file_forkbox_proto_rawDesc = "" +
 	"\n" +
 	"\rforkbox.proto\x12\n" +
-	"forkbox.v1\"\xbb\x02\n" +
+	"forkbox.v1\"\x12\n" +
+	"\x10PoolStatsRequest\"\xf3\x01\n" +
+	"\bPoolStat\x12\x1a\n" +
+	"\btemplate\x18\x01 \x01(\tR\btemplate\x12\x14\n" +
+	"\x05ready\x18\x02 \x01(\rR\x05ready\x12\x16\n" +
+	"\x06target\x18\x03 \x01(\rR\x06target\x12\x12\n" +
+	"\x04hits\x18\x04 \x01(\x04R\x04hits\x12\x16\n" +
+	"\x06misses\x18\x05 \x01(\x04R\x06misses\x12\x1d\n" +
+	"\n" +
+	"demand_10m\x18\x06 \x01(\rR\tdemand10m\x123\n" +
+	"\x16memory_mib_per_sandbox\x18\a \x01(\rR\x13memoryMibPerSandbox\x12\x1d\n" +
+	"\n" +
+	"last_error\x18\b \x01(\tR\tlastError\"?\n" +
+	"\x11PoolStatsResponse\x12*\n" +
+	"\x05pools\x18\x01 \x03(\v2\x14.forkbox.v1.PoolStatR\x05pools\"\xbb\x02\n" +
 	"\aSandbox\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1a\n" +
 	"\btemplate\x18\x02 \x01(\tR\btemplate\x12\x1f\n" +
@@ -2061,7 +2263,7 @@ const file_forkbox_proto_rawDesc = "" +
 	"faultP99Us\x12\x16\n" +
 	"\x06layers\x18\a \x01(\rR\x06layers\x12\x1f\n" +
 	"\vprefetch_ms\x18\b \x01(\x01R\n" +
-	"prefetchMs\"\xbb\x01\n" +
+	"prefetchMs\"\xd8\x01\n" +
 	"\rCreateTimings\x12\x19\n" +
 	"\btotal_ms\x18\x01 \x01(\x01R\atotalMs\x12\x17\n" +
 	"\adisk_ms\x18\x02 \x01(\x01R\x06diskMs\x12\x1d\n" +
@@ -2070,7 +2272,8 @@ const file_forkbox_proto_rawDesc = "" +
 	"\tresume_ms\x18\x04 \x01(\x01R\bresumeMs\x12\x19\n" +
 	"\bagent_ms\x18\x05 \x01(\x01R\aagentMs\x12\x1f\n" +
 	"\videntity_ms\x18\x06 \x01(\x01R\n" +
-	"identityMs\"G\n" +
+	"identityMs\x12\x1b\n" +
+	"\tfrom_pool\x18\a \x01(\bR\bfromPool\"G\n" +
 	"\x14CreateSandboxRequest\x12\x1a\n" +
 	"\btemplate\x18\x01 \x01(\tR\btemplate\x12\x13\n" +
 	"\x05ttl_s\x18\x02 \x01(\x04R\x04ttlS\"#\n" +
@@ -2197,7 +2400,7 @@ const file_forkbox_proto_rawDesc = "" +
 	"\x18DeleteCheckpointResponse\"E\n" +
 	"\x12ExposePortResponse\x12\x12\n" +
 	"\x04host\x18\x01 \x01(\tR\x04host\x12\x1b\n" +
-	"\thost_port\x18\x02 \x01(\rR\bhostPort2\xcb\b\n" +
+	"\thost_port\x18\x02 \x01(\rR\bhostPort2\x95\t\n" +
 	"\aForkbox\x12F\n" +
 	"\rCreateSandbox\x12 .forkbox.v1.CreateSandboxRequest\x1a\x13.forkbox.v1.Sandbox\x12@\n" +
 	"\n" +
@@ -2214,7 +2417,8 @@ const file_forkbox_proto_rawDesc = "" +
 	"\x0fListCheckpoints\x12\".forkbox.v1.ListCheckpointsRequest\x1a#.forkbox.v1.ListCheckpointsResponse\x12F\n" +
 	"\rRewindSandbox\x12 .forkbox.v1.RewindSandboxRequest\x1a\x13.forkbox.v1.Sandbox\x12N\n" +
 	"\x11RestoreCheckpoint\x12$.forkbox.v1.RestoreCheckpointRequest\x1a\x13.forkbox.v1.Sandbox\x12]\n" +
-	"\x10DeleteCheckpoint\x12#.forkbox.v1.DeleteCheckpointRequest\x1a$.forkbox.v1.DeleteCheckpointResponseB0Z.github.com/Lazypilottt/forkbox/proto/forkboxpbb\x06proto3"
+	"\x10DeleteCheckpoint\x12#.forkbox.v1.DeleteCheckpointRequest\x1a$.forkbox.v1.DeleteCheckpointResponse\x12H\n" +
+	"\tPoolStats\x12\x1c.forkbox.v1.PoolStatsRequest\x1a\x1d.forkbox.v1.PoolStatsResponseB0Z.github.com/Lazypilottt/forkbox/proto/forkboxpbb\x06proto3"
 
 var (
 	file_forkbox_proto_rawDescOnce sync.Once
@@ -2228,83 +2432,89 @@ func file_forkbox_proto_rawDescGZIP() []byte {
 	return file_forkbox_proto_rawDescData
 }
 
-var file_forkbox_proto_msgTypes = make([]protoimpl.MessageInfo, 31)
+var file_forkbox_proto_msgTypes = make([]protoimpl.MessageInfo, 34)
 var file_forkbox_proto_goTypes = []any{
-	(*Sandbox)(nil),                  // 0: forkbox.v1.Sandbox
-	(*PagerStats)(nil),               // 1: forkbox.v1.PagerStats
-	(*CreateTimings)(nil),            // 2: forkbox.v1.CreateTimings
-	(*CreateSandboxRequest)(nil),     // 3: forkbox.v1.CreateSandboxRequest
-	(*GetSandboxRequest)(nil),        // 4: forkbox.v1.GetSandboxRequest
-	(*ListSandboxesRequest)(nil),     // 5: forkbox.v1.ListSandboxesRequest
-	(*ListSandboxesResponse)(nil),    // 6: forkbox.v1.ListSandboxesResponse
-	(*ExecRequest)(nil),              // 7: forkbox.v1.ExecRequest
-	(*ExecEvent)(nil),                // 8: forkbox.v1.ExecEvent
-	(*ExecStarted)(nil),              // 9: forkbox.v1.ExecStarted
-	(*ExecExit)(nil),                 // 10: forkbox.v1.ExecExit
-	(*ReadFileRequest)(nil),          // 11: forkbox.v1.ReadFileRequest
-	(*FileChunk)(nil),                // 12: forkbox.v1.FileChunk
-	(*WriteFileHeader)(nil),          // 13: forkbox.v1.WriteFileHeader
-	(*WriteFileRequest)(nil),         // 14: forkbox.v1.WriteFileRequest
-	(*WriteFileResponse)(nil),        // 15: forkbox.v1.WriteFileResponse
-	(*DestroySandboxRequest)(nil),    // 16: forkbox.v1.DestroySandboxRequest
-	(*DestroySandboxResponse)(nil),   // 17: forkbox.v1.DestroySandboxResponse
-	(*ExposePortRequest)(nil),        // 18: forkbox.v1.ExposePortRequest
-	(*ForkSandboxRequest)(nil),       // 19: forkbox.v1.ForkSandboxRequest
-	(*ForkTimings)(nil),              // 20: forkbox.v1.ForkTimings
-	(*ForkSandboxResponse)(nil),      // 21: forkbox.v1.ForkSandboxResponse
-	(*Checkpoint)(nil),               // 22: forkbox.v1.Checkpoint
-	(*CreateCheckpointRequest)(nil),  // 23: forkbox.v1.CreateCheckpointRequest
-	(*ListCheckpointsRequest)(nil),   // 24: forkbox.v1.ListCheckpointsRequest
-	(*ListCheckpointsResponse)(nil),  // 25: forkbox.v1.ListCheckpointsResponse
-	(*RewindSandboxRequest)(nil),     // 26: forkbox.v1.RewindSandboxRequest
-	(*RestoreCheckpointRequest)(nil), // 27: forkbox.v1.RestoreCheckpointRequest
-	(*DeleteCheckpointRequest)(nil),  // 28: forkbox.v1.DeleteCheckpointRequest
-	(*DeleteCheckpointResponse)(nil), // 29: forkbox.v1.DeleteCheckpointResponse
-	(*ExposePortResponse)(nil),       // 30: forkbox.v1.ExposePortResponse
+	(*PoolStatsRequest)(nil),         // 0: forkbox.v1.PoolStatsRequest
+	(*PoolStat)(nil),                 // 1: forkbox.v1.PoolStat
+	(*PoolStatsResponse)(nil),        // 2: forkbox.v1.PoolStatsResponse
+	(*Sandbox)(nil),                  // 3: forkbox.v1.Sandbox
+	(*PagerStats)(nil),               // 4: forkbox.v1.PagerStats
+	(*CreateTimings)(nil),            // 5: forkbox.v1.CreateTimings
+	(*CreateSandboxRequest)(nil),     // 6: forkbox.v1.CreateSandboxRequest
+	(*GetSandboxRequest)(nil),        // 7: forkbox.v1.GetSandboxRequest
+	(*ListSandboxesRequest)(nil),     // 8: forkbox.v1.ListSandboxesRequest
+	(*ListSandboxesResponse)(nil),    // 9: forkbox.v1.ListSandboxesResponse
+	(*ExecRequest)(nil),              // 10: forkbox.v1.ExecRequest
+	(*ExecEvent)(nil),                // 11: forkbox.v1.ExecEvent
+	(*ExecStarted)(nil),              // 12: forkbox.v1.ExecStarted
+	(*ExecExit)(nil),                 // 13: forkbox.v1.ExecExit
+	(*ReadFileRequest)(nil),          // 14: forkbox.v1.ReadFileRequest
+	(*FileChunk)(nil),                // 15: forkbox.v1.FileChunk
+	(*WriteFileHeader)(nil),          // 16: forkbox.v1.WriteFileHeader
+	(*WriteFileRequest)(nil),         // 17: forkbox.v1.WriteFileRequest
+	(*WriteFileResponse)(nil),        // 18: forkbox.v1.WriteFileResponse
+	(*DestroySandboxRequest)(nil),    // 19: forkbox.v1.DestroySandboxRequest
+	(*DestroySandboxResponse)(nil),   // 20: forkbox.v1.DestroySandboxResponse
+	(*ExposePortRequest)(nil),        // 21: forkbox.v1.ExposePortRequest
+	(*ForkSandboxRequest)(nil),       // 22: forkbox.v1.ForkSandboxRequest
+	(*ForkTimings)(nil),              // 23: forkbox.v1.ForkTimings
+	(*ForkSandboxResponse)(nil),      // 24: forkbox.v1.ForkSandboxResponse
+	(*Checkpoint)(nil),               // 25: forkbox.v1.Checkpoint
+	(*CreateCheckpointRequest)(nil),  // 26: forkbox.v1.CreateCheckpointRequest
+	(*ListCheckpointsRequest)(nil),   // 27: forkbox.v1.ListCheckpointsRequest
+	(*ListCheckpointsResponse)(nil),  // 28: forkbox.v1.ListCheckpointsResponse
+	(*RewindSandboxRequest)(nil),     // 29: forkbox.v1.RewindSandboxRequest
+	(*RestoreCheckpointRequest)(nil), // 30: forkbox.v1.RestoreCheckpointRequest
+	(*DeleteCheckpointRequest)(nil),  // 31: forkbox.v1.DeleteCheckpointRequest
+	(*DeleteCheckpointResponse)(nil), // 32: forkbox.v1.DeleteCheckpointResponse
+	(*ExposePortResponse)(nil),       // 33: forkbox.v1.ExposePortResponse
 }
 var file_forkbox_proto_depIdxs = []int32{
-	2,  // 0: forkbox.v1.Sandbox.timings:type_name -> forkbox.v1.CreateTimings
-	1,  // 1: forkbox.v1.Sandbox.pager:type_name -> forkbox.v1.PagerStats
-	0,  // 2: forkbox.v1.ListSandboxesResponse.sandboxes:type_name -> forkbox.v1.Sandbox
-	9,  // 3: forkbox.v1.ExecEvent.started:type_name -> forkbox.v1.ExecStarted
-	10, // 4: forkbox.v1.ExecEvent.exit:type_name -> forkbox.v1.ExecExit
-	13, // 5: forkbox.v1.WriteFileRequest.header:type_name -> forkbox.v1.WriteFileHeader
-	0,  // 6: forkbox.v1.ForkSandboxResponse.children:type_name -> forkbox.v1.Sandbox
-	20, // 7: forkbox.v1.ForkSandboxResponse.timings:type_name -> forkbox.v1.ForkTimings
-	22, // 8: forkbox.v1.ListCheckpointsResponse.checkpoints:type_name -> forkbox.v1.Checkpoint
-	3,  // 9: forkbox.v1.Forkbox.CreateSandbox:input_type -> forkbox.v1.CreateSandboxRequest
-	4,  // 10: forkbox.v1.Forkbox.GetSandbox:input_type -> forkbox.v1.GetSandboxRequest
-	5,  // 11: forkbox.v1.Forkbox.ListSandboxes:input_type -> forkbox.v1.ListSandboxesRequest
-	7,  // 12: forkbox.v1.Forkbox.Exec:input_type -> forkbox.v1.ExecRequest
-	11, // 13: forkbox.v1.Forkbox.ReadFile:input_type -> forkbox.v1.ReadFileRequest
-	14, // 14: forkbox.v1.Forkbox.WriteFile:input_type -> forkbox.v1.WriteFileRequest
-	16, // 15: forkbox.v1.Forkbox.DestroySandbox:input_type -> forkbox.v1.DestroySandboxRequest
-	18, // 16: forkbox.v1.Forkbox.ExposePort:input_type -> forkbox.v1.ExposePortRequest
-	19, // 17: forkbox.v1.Forkbox.ForkSandbox:input_type -> forkbox.v1.ForkSandboxRequest
-	23, // 18: forkbox.v1.Forkbox.CreateCheckpoint:input_type -> forkbox.v1.CreateCheckpointRequest
-	24, // 19: forkbox.v1.Forkbox.ListCheckpoints:input_type -> forkbox.v1.ListCheckpointsRequest
-	26, // 20: forkbox.v1.Forkbox.RewindSandbox:input_type -> forkbox.v1.RewindSandboxRequest
-	27, // 21: forkbox.v1.Forkbox.RestoreCheckpoint:input_type -> forkbox.v1.RestoreCheckpointRequest
-	28, // 22: forkbox.v1.Forkbox.DeleteCheckpoint:input_type -> forkbox.v1.DeleteCheckpointRequest
-	0,  // 23: forkbox.v1.Forkbox.CreateSandbox:output_type -> forkbox.v1.Sandbox
-	0,  // 24: forkbox.v1.Forkbox.GetSandbox:output_type -> forkbox.v1.Sandbox
-	6,  // 25: forkbox.v1.Forkbox.ListSandboxes:output_type -> forkbox.v1.ListSandboxesResponse
-	8,  // 26: forkbox.v1.Forkbox.Exec:output_type -> forkbox.v1.ExecEvent
-	12, // 27: forkbox.v1.Forkbox.ReadFile:output_type -> forkbox.v1.FileChunk
-	15, // 28: forkbox.v1.Forkbox.WriteFile:output_type -> forkbox.v1.WriteFileResponse
-	17, // 29: forkbox.v1.Forkbox.DestroySandbox:output_type -> forkbox.v1.DestroySandboxResponse
-	30, // 30: forkbox.v1.Forkbox.ExposePort:output_type -> forkbox.v1.ExposePortResponse
-	21, // 31: forkbox.v1.Forkbox.ForkSandbox:output_type -> forkbox.v1.ForkSandboxResponse
-	22, // 32: forkbox.v1.Forkbox.CreateCheckpoint:output_type -> forkbox.v1.Checkpoint
-	25, // 33: forkbox.v1.Forkbox.ListCheckpoints:output_type -> forkbox.v1.ListCheckpointsResponse
-	0,  // 34: forkbox.v1.Forkbox.RewindSandbox:output_type -> forkbox.v1.Sandbox
-	0,  // 35: forkbox.v1.Forkbox.RestoreCheckpoint:output_type -> forkbox.v1.Sandbox
-	29, // 36: forkbox.v1.Forkbox.DeleteCheckpoint:output_type -> forkbox.v1.DeleteCheckpointResponse
-	23, // [23:37] is the sub-list for method output_type
-	9,  // [9:23] is the sub-list for method input_type
-	9,  // [9:9] is the sub-list for extension type_name
-	9,  // [9:9] is the sub-list for extension extendee
-	0,  // [0:9] is the sub-list for field type_name
+	1,  // 0: forkbox.v1.PoolStatsResponse.pools:type_name -> forkbox.v1.PoolStat
+	5,  // 1: forkbox.v1.Sandbox.timings:type_name -> forkbox.v1.CreateTimings
+	4,  // 2: forkbox.v1.Sandbox.pager:type_name -> forkbox.v1.PagerStats
+	3,  // 3: forkbox.v1.ListSandboxesResponse.sandboxes:type_name -> forkbox.v1.Sandbox
+	12, // 4: forkbox.v1.ExecEvent.started:type_name -> forkbox.v1.ExecStarted
+	13, // 5: forkbox.v1.ExecEvent.exit:type_name -> forkbox.v1.ExecExit
+	16, // 6: forkbox.v1.WriteFileRequest.header:type_name -> forkbox.v1.WriteFileHeader
+	3,  // 7: forkbox.v1.ForkSandboxResponse.children:type_name -> forkbox.v1.Sandbox
+	23, // 8: forkbox.v1.ForkSandboxResponse.timings:type_name -> forkbox.v1.ForkTimings
+	25, // 9: forkbox.v1.ListCheckpointsResponse.checkpoints:type_name -> forkbox.v1.Checkpoint
+	6,  // 10: forkbox.v1.Forkbox.CreateSandbox:input_type -> forkbox.v1.CreateSandboxRequest
+	7,  // 11: forkbox.v1.Forkbox.GetSandbox:input_type -> forkbox.v1.GetSandboxRequest
+	8,  // 12: forkbox.v1.Forkbox.ListSandboxes:input_type -> forkbox.v1.ListSandboxesRequest
+	10, // 13: forkbox.v1.Forkbox.Exec:input_type -> forkbox.v1.ExecRequest
+	14, // 14: forkbox.v1.Forkbox.ReadFile:input_type -> forkbox.v1.ReadFileRequest
+	17, // 15: forkbox.v1.Forkbox.WriteFile:input_type -> forkbox.v1.WriteFileRequest
+	19, // 16: forkbox.v1.Forkbox.DestroySandbox:input_type -> forkbox.v1.DestroySandboxRequest
+	21, // 17: forkbox.v1.Forkbox.ExposePort:input_type -> forkbox.v1.ExposePortRequest
+	22, // 18: forkbox.v1.Forkbox.ForkSandbox:input_type -> forkbox.v1.ForkSandboxRequest
+	26, // 19: forkbox.v1.Forkbox.CreateCheckpoint:input_type -> forkbox.v1.CreateCheckpointRequest
+	27, // 20: forkbox.v1.Forkbox.ListCheckpoints:input_type -> forkbox.v1.ListCheckpointsRequest
+	29, // 21: forkbox.v1.Forkbox.RewindSandbox:input_type -> forkbox.v1.RewindSandboxRequest
+	30, // 22: forkbox.v1.Forkbox.RestoreCheckpoint:input_type -> forkbox.v1.RestoreCheckpointRequest
+	31, // 23: forkbox.v1.Forkbox.DeleteCheckpoint:input_type -> forkbox.v1.DeleteCheckpointRequest
+	0,  // 24: forkbox.v1.Forkbox.PoolStats:input_type -> forkbox.v1.PoolStatsRequest
+	3,  // 25: forkbox.v1.Forkbox.CreateSandbox:output_type -> forkbox.v1.Sandbox
+	3,  // 26: forkbox.v1.Forkbox.GetSandbox:output_type -> forkbox.v1.Sandbox
+	9,  // 27: forkbox.v1.Forkbox.ListSandboxes:output_type -> forkbox.v1.ListSandboxesResponse
+	11, // 28: forkbox.v1.Forkbox.Exec:output_type -> forkbox.v1.ExecEvent
+	15, // 29: forkbox.v1.Forkbox.ReadFile:output_type -> forkbox.v1.FileChunk
+	18, // 30: forkbox.v1.Forkbox.WriteFile:output_type -> forkbox.v1.WriteFileResponse
+	20, // 31: forkbox.v1.Forkbox.DestroySandbox:output_type -> forkbox.v1.DestroySandboxResponse
+	33, // 32: forkbox.v1.Forkbox.ExposePort:output_type -> forkbox.v1.ExposePortResponse
+	24, // 33: forkbox.v1.Forkbox.ForkSandbox:output_type -> forkbox.v1.ForkSandboxResponse
+	25, // 34: forkbox.v1.Forkbox.CreateCheckpoint:output_type -> forkbox.v1.Checkpoint
+	28, // 35: forkbox.v1.Forkbox.ListCheckpoints:output_type -> forkbox.v1.ListCheckpointsResponse
+	3,  // 36: forkbox.v1.Forkbox.RewindSandbox:output_type -> forkbox.v1.Sandbox
+	3,  // 37: forkbox.v1.Forkbox.RestoreCheckpoint:output_type -> forkbox.v1.Sandbox
+	32, // 38: forkbox.v1.Forkbox.DeleteCheckpoint:output_type -> forkbox.v1.DeleteCheckpointResponse
+	2,  // 39: forkbox.v1.Forkbox.PoolStats:output_type -> forkbox.v1.PoolStatsResponse
+	25, // [25:40] is the sub-list for method output_type
+	10, // [10:25] is the sub-list for method input_type
+	10, // [10:10] is the sub-list for extension type_name
+	10, // [10:10] is the sub-list for extension extendee
+	0,  // [0:10] is the sub-list for field type_name
 }
 
 func init() { file_forkbox_proto_init() }
@@ -2312,24 +2522,24 @@ func file_forkbox_proto_init() {
 	if File_forkbox_proto != nil {
 		return
 	}
-	file_forkbox_proto_msgTypes[8].OneofWrappers = []any{
+	file_forkbox_proto_msgTypes[11].OneofWrappers = []any{
 		(*ExecEvent_Started)(nil),
 		(*ExecEvent_Stdout)(nil),
 		(*ExecEvent_Stderr)(nil),
 		(*ExecEvent_Exit)(nil),
 	}
-	file_forkbox_proto_msgTypes[14].OneofWrappers = []any{
+	file_forkbox_proto_msgTypes[17].OneofWrappers = []any{
 		(*WriteFileRequest_Header)(nil),
 		(*WriteFileRequest_Data)(nil),
 	}
-	file_forkbox_proto_msgTypes[19].OneofWrappers = []any{}
+	file_forkbox_proto_msgTypes[22].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_forkbox_proto_rawDesc), len(file_forkbox_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   31,
+			NumMessages:   34,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

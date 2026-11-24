@@ -104,6 +104,11 @@ class ForkboxStub:
                 request_serializer=forkbox__pb2.DeleteCheckpointRequest.SerializeToString,
                 response_deserializer=forkbox__pb2.DeleteCheckpointResponse.FromString,
                 _registered_method=True)
+        self.PoolStats = channel.unary_unary(
+                '/forkbox.v1.Forkbox/PoolStats',
+                request_serializer=forkbox__pb2.PoolStatsRequest.SerializeToString,
+                response_deserializer=forkbox__pb2.PoolStatsResponse.FromString,
+                _registered_method=True)
 
 
 class ForkboxServicer:
@@ -209,6 +214,14 @@ class ForkboxServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def PoolStats(self, request, context):
+        """Warm pools: K restored, paused sandboxes per template, so a create is a
+        resume. K follows demand within a memory budget.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_ForkboxServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -281,6 +294,11 @@ def add_ForkboxServicer_to_server(servicer, server):
                     servicer.DeleteCheckpoint,
                     request_deserializer=forkbox__pb2.DeleteCheckpointRequest.FromString,
                     response_serializer=forkbox__pb2.DeleteCheckpointResponse.SerializeToString,
+            ),
+            'PoolStats': grpc.unary_unary_rpc_method_handler(
+                    servicer.PoolStats,
+                    request_deserializer=forkbox__pb2.PoolStatsRequest.FromString,
+                    response_serializer=forkbox__pb2.PoolStatsResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -661,6 +679,33 @@ class Forkbox:
             '/forkbox.v1.Forkbox/DeleteCheckpoint',
             forkbox__pb2.DeleteCheckpointRequest.SerializeToString,
             forkbox__pb2.DeleteCheckpointResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def PoolStats(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/forkbox.v1.Forkbox/PoolStats',
+            forkbox__pb2.PoolStatsRequest.SerializeToString,
+            forkbox__pb2.PoolStatsResponse.FromString,
             options,
             channel_credentials,
             insecure,

@@ -105,7 +105,7 @@ def main() -> int:
     ap.add_argument("--out", default=str(Path(__file__).resolve().parent / "results"))
     args = ap.parse_args()
 
-    latency, server_total, mem_rss, mem_pss = [], [], [], []
+    latency, server_total, mem_rss, mem_pss, pooled = [], [], [], [], []
     steps: dict[str, list[float]] = {k: [] for k in ("disk_ms", "restore_ms", "resume_ms", "agent_ms", "identity_ms")}
     alive: deque[Sandbox] = deque()
     started = datetime.now(timezone.utc)
@@ -119,6 +119,7 @@ def main() -> int:
                 raise SystemExit(f"run {i}: first exec failed: {r}")
             alive.append(sb)
             latency.append(dt)
+            pooled.append(bool(sb.timings.from_pool))
             server_total.append(sb.timings.total_ms)
             for k in steps:
                 steps[k].append(getattr(sb.timings, k))
@@ -140,6 +141,9 @@ def main() -> int:
         "started_at": started.isoformat(),
         "host": host_details(args.data_dir),
         "create_to_first_exec_ms": summary(latency),
+        "from_warm_pool": sum(pooled),
+        "create_to_first_exec_ms_pool_hits": summary([x for x, p in zip(latency, pooled) if p]) if any(pooled) else None,
+        "create_to_first_exec_ms_pool_misses": summary([x for x, p in zip(latency, pooled) if not p]) if not all(pooled) else None,
         "daemon_create_ms": summary(server_total),
         "daemon_steps_ms": {k: summary(v) for k, v in steps.items()},
         "firecracker_rss_mib": summary(mem_rss),
@@ -160,6 +164,10 @@ def table(r: dict) -> str:
     h = r["host"]
     rows = [
         ("create to first exec (ms)", r["create_to_first_exec_ms"]),
+        *([(f"  from the warm pool ({r['from_warm_pool']} of {r['runs']}) (ms)", r["create_to_first_exec_ms_pool_hits"])]
+          if r.get("create_to_first_exec_ms_pool_hits") else []),
+        *([("  restored on demand (ms)", r["create_to_first_exec_ms_pool_misses"])]
+          if r.get("create_to_first_exec_ms_pool_hits") and r.get("create_to_first_exec_ms_pool_misses") else []),
         ("daemon create (ms)", r["daemon_create_ms"]),
         *((f"  {k.removesuffix('_ms')} (ms)", v) for k, v in r["daemon_steps_ms"].items()),
         ("Firecracker RSS (MiB)", r["firecracker_rss_mib"]),

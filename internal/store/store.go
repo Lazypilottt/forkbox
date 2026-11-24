@@ -127,6 +127,7 @@ func (s *Store) migrate() error {
 // Sandbox states.
 const (
 	StateCreating   = "creating"
+	StateWarm       = "warm" // restored and paused in a warm pool, not yet handed out
 	StateRunning    = "running"
 	StatePaused     = "paused"
 	StateDestroying = "destroying"
@@ -560,6 +561,18 @@ func (s *Store) DeleteLayer(ctx context.Context, id string) error {
 // SetPager records a sandbox's page server pid.
 func (s *Store) SetPager(ctx context.Context, sandboxID string, pid int) error {
 	res, err := s.db.ExecContext(ctx, `UPDATE sandboxes SET pager_pid = ?, updated_at = ? WHERE id = ?`, pid, time.Now().UnixNano(), sandboxID)
+	if err != nil {
+		return err
+	}
+	return mustAffect(res, sandboxID)
+}
+
+// SetTTL sets a sandbox's time to live, counted from now (a warm pool
+// sandbox's life starts when it is handed out).
+func (s *Store) SetTTL(ctx context.Context, sandboxID string, ttl time.Duration) error {
+	now := time.Now().UnixNano()
+	res, err := s.db.ExecContext(ctx, `UPDATE sandboxes SET ttl_s = ?, created_at = ?, updated_at = ? WHERE id = ?`,
+		int64(ttl/time.Second), now, now, sandboxID)
 	if err != nil {
 		return err
 	}

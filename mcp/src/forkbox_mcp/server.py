@@ -152,6 +152,31 @@ def fork(
 
 
 @tool()
+def race(
+    sandbox_id: Annotated[str, Field(description="The running sandbox to fork; it is left as it is.")],
+    commands: Annotated[list[str], Field(min_length=1, max_length=50, description="One shell command per attempt, e.g. different candidate fixes. Attempt i runs commands[i] in its own fork of the sandbox.")],
+    check_command: Annotated[str, Field(description="A shell command run in each finished attempt; exit code 0 means the attempt passed, e.g. 'pytest -q'.")],
+    timeout_seconds: Annotated[float, Field(gt=0, le=3600, description="Give up on attempts still running after this long.")] = 600,
+) -> str:
+    """Try several approaches in parallel and keep the first that works. The sandbox is forked once per command; each fork runs its command, then the check. The first fork whose check passes is kept and returned; all the others are destroyed. Use the returned sandbox id to continue from the winning state."""
+    def run(child, i):
+        return child.exec(commands[i], timeout=timeout_seconds)
+
+    def check(child):
+        return child.exec(check_command, timeout=timeout_seconds).ok
+
+    r = _sb(sandbox_id).race(len(commands), run, check, timeout=timeout_seconds)
+    rows = []
+    for a in r.attempts:
+        state = "PASSED" if a.passed else ("cancelled" if a.cancelled else ("error: " + a.error if a.error else "failed check"))
+        code = f", command exit {a.result.exit_code}" if a.result is not None and hasattr(a.result, "exit_code") else ""
+        rows.append(f"  attempt {a.index}: {state}{code}, {a.duration_s:.1f}s")
+    head = (f"Attempt {r.index} passed: continue in sandbox {r.winner.id} (the other forks were destroyed)."
+            if r.winner else "No attempt passed; every fork was destroyed.")
+    return head + "\n" + "\n".join(rows)
+
+
+@tool()
 def checkpoint(
     sandbox_id: Annotated[str, Field(description="The sandbox to save.")],
     name: Annotated[str, Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$", description="A name for this point, unique within the sandbox, e.g. 'before-refactor'.")],

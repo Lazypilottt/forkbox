@@ -46,6 +46,7 @@ const (
 	Forkbox_RewindSandbox_FullMethodName     = "/forkbox.v1.Forkbox/RewindSandbox"
 	Forkbox_RestoreCheckpoint_FullMethodName = "/forkbox.v1.Forkbox/RestoreCheckpoint"
 	Forkbox_DeleteCheckpoint_FullMethodName  = "/forkbox.v1.Forkbox/DeleteCheckpoint"
+	Forkbox_PoolStats_FullMethodName         = "/forkbox.v1.Forkbox/PoolStats"
 )
 
 // ForkboxClient is the client API for Forkbox service.
@@ -82,6 +83,9 @@ type ForkboxClient interface {
 	// Creates a separate sandbox from a checkpoint.
 	RestoreCheckpoint(ctx context.Context, in *RestoreCheckpointRequest, opts ...grpc.CallOption) (*Sandbox, error)
 	DeleteCheckpoint(ctx context.Context, in *DeleteCheckpointRequest, opts ...grpc.CallOption) (*DeleteCheckpointResponse, error)
+	// Warm pools: K restored, paused sandboxes per template, so a create is a
+	// resume. K follows demand within a memory budget.
+	PoolStats(ctx context.Context, in *PoolStatsRequest, opts ...grpc.CallOption) (*PoolStatsResponse, error)
 }
 
 type forkboxClient struct {
@@ -253,6 +257,16 @@ func (c *forkboxClient) DeleteCheckpoint(ctx context.Context, in *DeleteCheckpoi
 	return out, nil
 }
 
+func (c *forkboxClient) PoolStats(ctx context.Context, in *PoolStatsRequest, opts ...grpc.CallOption) (*PoolStatsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PoolStatsResponse)
+	err := c.cc.Invoke(ctx, Forkbox_PoolStats_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ForkboxServer is the server API for Forkbox service.
 // All implementations must embed UnimplementedForkboxServer
 // for forward compatibility.
@@ -287,6 +301,9 @@ type ForkboxServer interface {
 	// Creates a separate sandbox from a checkpoint.
 	RestoreCheckpoint(context.Context, *RestoreCheckpointRequest) (*Sandbox, error)
 	DeleteCheckpoint(context.Context, *DeleteCheckpointRequest) (*DeleteCheckpointResponse, error)
+	// Warm pools: K restored, paused sandboxes per template, so a create is a
+	// resume. K follows demand within a memory budget.
+	PoolStats(context.Context, *PoolStatsRequest) (*PoolStatsResponse, error)
 	mustEmbedUnimplementedForkboxServer()
 }
 
@@ -338,6 +355,9 @@ func (UnimplementedForkboxServer) RestoreCheckpoint(context.Context, *RestoreChe
 }
 func (UnimplementedForkboxServer) DeleteCheckpoint(context.Context, *DeleteCheckpointRequest) (*DeleteCheckpointResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DeleteCheckpoint not implemented")
+}
+func (UnimplementedForkboxServer) PoolStats(context.Context, *PoolStatsRequest) (*PoolStatsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PoolStats not implemented")
 }
 func (UnimplementedForkboxServer) mustEmbedUnimplementedForkboxServer() {}
 func (UnimplementedForkboxServer) testEmbeddedByValue()                 {}
@@ -587,6 +607,24 @@ func _Forkbox_DeleteCheckpoint_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Forkbox_PoolStats_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PoolStatsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ForkboxServer).PoolStats(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Forkbox_PoolStats_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ForkboxServer).PoolStats(ctx, req.(*PoolStatsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Forkbox_ServiceDesc is the grpc.ServiceDesc for Forkbox service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -637,6 +675,10 @@ var Forkbox_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DeleteCheckpoint",
 			Handler:    _Forkbox_DeleteCheckpoint_Handler,
+		},
+		{
+			MethodName: "PoolStats",
+			Handler:    _Forkbox_PoolStats_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

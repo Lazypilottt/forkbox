@@ -284,6 +284,10 @@ func (m *Manager) restoreVM(ctx context.Context, c *Created, snapDir string, mem
 	m.vms[rec.ID] = v
 	m.mu.Unlock()
 	c.Timings.Restore = time.Since(t)
+	if c.warm {
+		rec.Pid = v.Pid()
+		return m.Store.SetState(ctx, rec.ID, store.StateWarm, rec.Pid, "")
+	}
 	return m.finishRestore(ctx, c, v)
 }
 

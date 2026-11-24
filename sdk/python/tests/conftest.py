@@ -171,6 +171,9 @@ class FakeForkbox(pbg.ForkboxServicer):
             context.abort(grpc.StatusCode.NOT_FOUND, f"checkpoint {request.name!r} not found")
         return pb.DeleteCheckpointResponse()
 
+    def PoolStats(self, request, context):
+        return pb.PoolStatsResponse(pools=[pb.PoolStat(template="python", ready=2, target=3, hits=5, misses=1, demand_10m=6)])
+
     def ExposePort(self, request, context):
         self._get(request.sandbox_id, context)
         if not 0 < request.guest_port < 65536:

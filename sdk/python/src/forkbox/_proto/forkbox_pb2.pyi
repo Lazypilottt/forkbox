@@ -6,6 +6,36 @@ from typing import ClassVar as _ClassVar, Optional as _Optional, Union as _Union
 
 DESCRIPTOR: _descriptor.FileDescriptor
 
+class PoolStatsRequest(_message.Message):
+    __slots__ = ()
+    def __init__(self) -> None: ...
+
+class PoolStat(_message.Message):
+    __slots__ = ("template", "ready", "target", "hits", "misses", "demand_10m", "memory_mib_per_sandbox", "last_error")
+    TEMPLATE_FIELD_NUMBER: _ClassVar[int]
+    READY_FIELD_NUMBER: _ClassVar[int]
+    TARGET_FIELD_NUMBER: _ClassVar[int]
+    HITS_FIELD_NUMBER: _ClassVar[int]
+    MISSES_FIELD_NUMBER: _ClassVar[int]
+    DEMAND_10M_FIELD_NUMBER: _ClassVar[int]
+    MEMORY_MIB_PER_SANDBOX_FIELD_NUMBER: _ClassVar[int]
+    LAST_ERROR_FIELD_NUMBER: _ClassVar[int]
+    template: str
+    ready: int
+    target: int
+    hits: int
+    misses: int
+    demand_10m: int
+    memory_mib_per_sandbox: int
+    last_error: str
+    def __init__(self, template: _Optional[str] = ..., ready: _Optional[int] = ..., target: _Optional[int] = ..., hits: _Optional[int] = ..., misses: _Optional[int] = ..., demand_10m: _Optional[int] = ..., memory_mib_per_sandbox: _Optional[int] = ..., last_error: _Optional[str] = ...) -> None: ...
+
+class PoolStatsResponse(_message.Message):
+    __slots__ = ("pools",)
+    POOLS_FIELD_NUMBER: _ClassVar[int]
+    pools: _containers.RepeatedCompositeFieldContainer[PoolStat]
+    def __init__(self, pools: _Optional[_Iterable[_Union[PoolStat, _Mapping]]] = ...) -> None: ...
+
 class Sandbox(_message.Message):
     __slots__ = ("id", "template", "template_id", "parent", "state", "created_at_unix_ms", "ttl_s", "pid", "timings", "pager")
     ID_FIELD_NUMBER: _ClassVar[int]
@@ -51,20 +81,22 @@ class PagerStats(_message.Message):
     def __init__(self, faults: _Optional[int] = ..., copied: _Optional[int] = ..., zeroed: _Optional[int] = ..., prefetched: _Optional[int] = ..., fault_p50_us: _Optional[float] = ..., fault_p99_us: _Optional[float] = ..., layers: _Optional[int] = ..., prefetch_ms: _Optional[float] = ...) -> None: ...
 
 class CreateTimings(_message.Message):
-    __slots__ = ("total_ms", "disk_ms", "restore_ms", "resume_ms", "agent_ms", "identity_ms")
+    __slots__ = ("total_ms", "disk_ms", "restore_ms", "resume_ms", "agent_ms", "identity_ms", "from_pool")
     TOTAL_MS_FIELD_NUMBER: _ClassVar[int]
     DISK_MS_FIELD_NUMBER: _ClassVar[int]
     RESTORE_MS_FIELD_NUMBER: _ClassVar[int]
     RESUME_MS_FIELD_NUMBER: _ClassVar[int]
     AGENT_MS_FIELD_NUMBER: _ClassVar[int]
     IDENTITY_MS_FIELD_NUMBER: _ClassVar[int]
+    FROM_POOL_FIELD_NUMBER: _ClassVar[int]
     total_ms: float
     disk_ms: float
     restore_ms: float
     resume_ms: float
     agent_ms: float
     identity_ms: float
-    def __init__(self, total_ms: _Optional[float] = ..., disk_ms: _Optional[float] = ..., restore_ms: _Optional[float] = ..., resume_ms: _Optional[float] = ..., agent_ms: _Optional[float] = ..., identity_ms: _Optional[float] = ...) -> None: ...
+    from_pool: bool
+    def __init__(self, total_ms: _Optional[float] = ..., disk_ms: _Optional[float] = ..., restore_ms: _Optional[float] = ..., resume_ms: _Optional[float] = ..., agent_ms: _Optional[float] = ..., identity_ms: _Optional[float] = ..., from_pool: _Optional[bool] = ...) -> None: ...
 
 class CreateSandboxRequest(_message.Message):
     __slots__ = ("template", "ttl_s")

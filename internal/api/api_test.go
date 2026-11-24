@@ -140,6 +140,10 @@ func (b *fakeBackend) Expose(ctx context.Context, id string, guest, host int) (i
 	return host, nil
 }
 
+func (b *fakeBackend) PoolStats() []sandbox.PoolStat {
+	return []sandbox.PoolStat{{Template: "python", Ready: 2, Target: 3, Hits: 7, Misses: 1, Demand10m: 8, MemoryMiBPerSandbox: 512}}
+}
+
 func (b *fakeBackend) PagerStats(id string) (map[string]any, error) {
 	if id == "sb-1" {
 		return map[string]any{"faults": 12.0, "fault_p50_us": 3.5, "layers": 2.0}, nil
@@ -300,6 +304,9 @@ func TestSandboxCRUD(t *testing.T) {
 	}
 	if _, err := c.ExposePort(ctx, &pb.ExposePortRequest{SandboxId: "sb-9", GuestPort: 80}); code(err) != codes.NotFound {
 		t.Errorf("expose on a missing sandbox: %v", err)
+	}
+	if ps, err := c.PoolStats(ctx, &pb.PoolStatsRequest{}); err != nil || len(ps.Pools) != 1 || ps.Pools[0].Hits != 7 || ps.Pools[0].Demand_10M != 8 {
+		t.Errorf("pool stats: %v %v", ps, err)
 	}
 	cp, err := c.CreateCheckpoint(ctx, &pb.CreateCheckpointRequest{SandboxId: "sb-1", Name: "before"})
 	if err != nil || cp.Name != "before" || cp.PausedMs != 2 || cp.DirtyBytes != 4096 {

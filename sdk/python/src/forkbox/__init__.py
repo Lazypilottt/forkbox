@@ -19,12 +19,13 @@ from .errors import (
     UnauthenticatedError,
     UnavailableError,
 )
-from .sandbox import Checkpoint, CreateTimings, ExecEvent, ExecResult, FileSystem, ForkTimings, Sandbox
+from .sandbox import Attempt, Checkpoint, CreateTimings, ExecEvent, ExecResult, FileSystem, ForkTimings, RaceResult, Sandbox, pool_stats
 
 __version__ = "0.1.0"
 
 __all__ = [
     "AlreadyExistsError",
+    "Attempt",
     "Checkpoint",
     "Client",
     "CommandError",
@@ -38,10 +39,12 @@ __all__ = [
     "ForkboxError",
     "InvalidArgumentError",
     "NotFoundError",
+    "RaceResult",
     "ResourceExhaustedError",
     "Sandbox",
     "UnauthenticatedError",
     "UnavailableError",
     "default_client",
+    "pool_stats",
     "set_default_client",
 ]
