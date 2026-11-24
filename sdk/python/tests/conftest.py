@@ -124,7 +124,8 @@ class FakeForkbox(pbg.ForkboxServicer):
         parent = self._get(request.id, context)
         if not 0 < request.n <= 256:
             context.abort(grpc.StatusCode.INVALID_ARGUMENT, "n must be 1 to 256")
-        out = pb.ForkSandboxResponse(layer="layer-1")
+        out = pb.ForkSandboxResponse(layer="layer-1", memory_backend=request.memory_backend or "merge")
+        self.last_fork_request = request
         out.timings.CopyFrom(pb.ForkTimings(parent_paused_ms=4.5, merge_ms=12, total_ms=90, dirty_bytes=1 << 20))
         for _ in range(request.n):
             with self.lock:

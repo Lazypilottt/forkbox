@@ -137,6 +137,9 @@ def test_fork(daemon):
         assert len({k.id for k in kids}) == 3 and all(k.state == "running" for k in kids)
         assert sb.last_fork.parent_paused_ms == 4.5 and sb.last_fork.restore_ms == (30.0, 30.0, 30.0)
         assert sb.last_fork.layer == "layer-1" and sb.last_fork.dirty_bytes == 1 << 20
+        sb.fork(1, memory_backend="uffd", prefetch=True)
+        req = daemon.last_fork_request
+        assert req.memory_backend == "uffd" and req.HasField("prefetch") and req.prefetch
         with pytest.raises(InvalidArgumentError):
             sb.fork(0)
         for k in kids:

@@ -39,6 +39,13 @@ const (
 )
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "pagesrv" {
+		if err := runPagesrv(os.Args[2:]); err != nil {
+			log.SetFlags(0)
+			log.Fatalf("forkboxd pagesrv: %v", err)
+		}
+		return
+	}
 	if err := run(); err != nil {
 		log.SetFlags(0)
 		log.Fatalf("forkboxd: %v", err)
@@ -54,6 +61,8 @@ func run() error {
 	sweep := flag.Duration("ttl-sweep", 10*time.Second, "how often to destroy sandboxes past their TTL")
 	pool := flag.String("net-pool", netns.DefaultPool, "IPv4 pool for sandbox uplinks (one /30 each)")
 	exposeAddr := flag.String("expose-addr", "127.0.0.1", "host address port forwards listen on")
+	memBackend := flag.String("memory-backend", sandbox.BackendMerge, "how forks keep memory: merge (merged layers) or uffd (page server, layer chains)")
+	prefetch := flag.Bool("prefetch", false, "uffd: page servers copy a fork's dirty pages before the child asks")
 	showVersion := flag.Bool("version", false, "print the version and exit")
 	flag.Parse()
 	if *showVersion {
@@ -109,6 +118,8 @@ func run() error {
 	sbm := sandbox.New(*dataDir, vms, st, nm)
 	sbm.Log = logger
 	sbm.ExposeAddr = *exposeAddr
+	sbm.MemoryBackend = *memBackend
+	sbm.Prefetch = *prefetch
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()

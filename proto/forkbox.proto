@@ -59,6 +59,20 @@ message Sandbox {
   uint64 ttl_s = 7;       // 0: no expiry
   int32 pid = 8;          // Firecracker process on the host
   CreateTimings timings = 9; // only in the CreateSandbox answer
+  PagerStats pager = 10;     // uffd-backed sandboxes, in GetSandbox
+}
+
+// The page server's counters for a sandbox whose memory is served from a
+// layer chain (memory backend uffd).
+message PagerStats {
+  uint64 faults = 1;
+  uint64 copied = 2;
+  uint64 zeroed = 3;
+  uint64 prefetched = 4;
+  double fault_p50_us = 5;
+  double fault_p99_us = 6;
+  uint32 layers = 7;
+  double prefetch_ms = 8;
 }
 
 message CreateTimings {
@@ -161,6 +175,8 @@ message ForkSandboxRequest {
   string id = 1;
   uint32 n = 2;           // 1 to 256
   uint32 concurrency = 3; // parallel restores; 0: one per host CPU
+  string memory_backend = 4; // "merge" or "uffd"; empty: the daemon's setting
+  optional bool prefetch = 5; // uffd: copy the parent's dirty pages ahead
 }
 
 message ForkTimings {
@@ -180,6 +196,7 @@ message ForkSandboxResponse {
   repeated Sandbox children = 1;
   ForkTimings timings = 2;
   string layer = 3; // the memory layer the children were restored from
+  string memory_backend = 4;
 }
 
 message Checkpoint {

@@ -140,11 +140,19 @@ func (b *fakeBackend) Expose(ctx context.Context, id string, guest, host int) (i
 	return host, nil
 }
 
-func (b *fakeBackend) Fork(ctx context.Context, id string, n, _ int) (*sandbox.ForkResult, error) {
+func (b *fakeBackend) PagerStats(id string) (map[string]any, error) {
+	if id == "sb-1" {
+		return map[string]any{"faults": 12.0, "fault_p50_us": 3.5, "layers": 2.0}, nil
+	}
+	return nil, nil
+}
+
+func (b *fakeBackend) ForkWith(ctx context.Context, id string, o sandbox.ForkOptions) (*sandbox.ForkResult, error) {
+	n := o.N
 	if _, err := b.Get(ctx, id); err != nil {
 		return nil, err
 	}
-	res := &sandbox.ForkResult{Layer: "layer-x", Timings: sandbox.ForkTimings{ParentPaused: 3 * time.Millisecond, DirtyBytes: 1 << 20}}
+	res := &sandbox.ForkResult{Layer: "layer-x", Backend: o.Backend, Timings: sandbox.ForkTimings{ParentPaused: 3 * time.Millisecond, DirtyBytes: 1 << 20}}
 	for i := 0; i < n; i++ {
 		c, err := b.Create(ctx, sandbox.CreateOptions{Template: "python"})
 		if err != nil {
@@ -277,7 +285,7 @@ func TestSandboxCRUD(t *testing.T) {
 		t.Errorf("no template: %v", err)
 	}
 	got, err := c.GetSandbox(ctx, &pb.GetSandboxRequest{Id: "sb-1"})
-	if err != nil || got.Id != "sb-1" || got.Timings != nil {
+	if err != nil || got.Id != "sb-1" || got.Timings != nil || got.Pager.GetFaults() != 12 || got.Pager.GetLayers() != 2 {
 		t.Errorf("get %v %v", got, err)
 	}
 	list, err := c.ListSandboxes(ctx, &pb.ListSandboxesRequest{})
@@ -315,8 +323,8 @@ func TestSandboxCRUD(t *testing.T) {
 	if _, err := c.DeleteCheckpoint(ctx, &pb.DeleteCheckpointRequest{SandboxId: "sb-1", Name: "before"}); err != nil {
 		t.Errorf("delete checkpoint: %v", err)
 	}
-	fr, err := c.ForkSandbox(ctx, &pb.ForkSandboxRequest{Id: "sb-1", N: 3})
-	if err != nil || len(fr.Children) != 3 || fr.Children[0].Parent != "sb-1" || fr.Layer != "layer-x" ||
+	fr, err := c.ForkSandbox(ctx, &pb.ForkSandboxRequest{Id: "sb-1", N: 3, MemoryBackend: "uffd"})
+	if err != nil || len(fr.Children) != 3 || fr.Children[0].Parent != "sb-1" || fr.Layer != "layer-x" || fr.MemoryBackend != "uffd" ||
 		fr.Timings.ParentPausedMs != 3 || len(fr.Timings.RestoreMs) != 3 || fr.Timings.DirtyBytes != 1<<20 {
 		t.Errorf("fork: %v %v", fr, err)
 	}

@@ -47,7 +47,7 @@ func (m *Manager) Checkpoint(ctx context.Context, id, name string) (*store.Check
 	if err != nil {
 		return nil, nil, err
 	}
-	baseMem, err := m.layerMem(ctx, sb, tpl)
+	backend, err := m.backendFor(ctx, sb, "")
 	if err != nil {
 		return nil, nil, err
 	}
@@ -63,7 +63,16 @@ func (m *Manager) Checkpoint(ctx context.Context, id, name string) (*store.Check
 	}
 	tm := &ForkTimings{}
 	start := time.Now()
-	if err := m.snapshotLayer(ctx, sb, v, baseMem, cp.Layer, []string{filepath.Join(cp.Dir, DiskFile)}, tm); err != nil {
+	disks := []string{filepath.Join(cp.Dir, DiskFile)}
+	if backend == BackendUffd {
+		err = m.snapshotDiffLayer(ctx, sb, v, cp.Layer, disks, tm)
+	} else {
+		var baseMem string
+		if baseMem, err = m.layerMem(ctx, sb, tpl); err == nil {
+			err = m.snapshotLayer(ctx, sb, v, baseMem, cp.Layer, disks, tm)
+		}
+	}
+	if err != nil {
 		os.RemoveAll(cp.Dir)
 		return nil, nil, fmt.Errorf("checkpoint %s: %w", id, err)
 	}
@@ -99,12 +108,17 @@ func (m *Manager) Rewind(ctx context.Context, id, name string) (*Created, error)
 	if err != nil {
 		return nil, err
 	}
-	l, err := m.Store.GetLayer(ctx, cp.Layer)
+	tpl, err := template.Get(m.DataDir, sb.Template)
+	if err != nil {
+		return nil, err
+	}
+	snapDir, src, err := m.layerSource(ctx, cp.Layer, tpl)
 	if err != nil {
 		return nil, err
 	}
 	start := time.Now()
 	_ = m.Store.SetState(ctx, id, store.StateCreating, sb.Pid, "")
+	killPager(sb.PagerPid, id)
 	if err := m.stopVM(ctx, id); err != nil {
 		return nil, m.failSandbox(ctx, id, err)
 	}
@@ -119,7 +133,7 @@ func (m *Manager) Rewind(ctx context.Context, id, name string) (*Created, error)
 	// The namespace and slot stay: restoreInto's network step is idempotent
 	// for the same slot, but recreating it would cut port forwards, so the
 	// VM is restored straight into the existing namespace.
-	if err := m.restoreVM(ctx, c, l.Dir, l.Mem, disk); err != nil {
+	if err := m.restoreVM(ctx, c, snapDir, src, disk); err != nil {
 		return nil, m.failSandbox(ctx, id, err)
 	}
 	if err := m.Store.SetBaseLayer(ctx, id, cp.Layer); err != nil {
@@ -139,7 +153,11 @@ func (m *Manager) RestoreAsNew(ctx context.Context, sandboxID, nameOrID string, 
 	if err != nil {
 		return nil, err
 	}
-	l, err := m.Store.GetLayer(ctx, cp.Layer)
+	tpl, err := template.Get(m.DataDir, cp.Template)
+	if err != nil {
+		return nil, err
+	}
+	snapDir, src, err := m.layerSource(ctx, cp.Layer, tpl)
 	if err != nil {
 		return nil, err
 	}
@@ -162,7 +180,7 @@ func (m *Manager) RestoreAsNew(ctx context.Context, sandboxID, nameOrID string, 
 		if err := storage.Reflink(filepath.Join(cp.Dir, DiskFile), disk); err != nil {
 			return err
 		}
-		return m.restoreInto(ctx, c, l.Dir, l.Mem, disk)
+		return m.restoreInto(ctx, c, snapDir, src, disk)
 	}()
 	if err != nil {
 		cerr := m.cleanup(context.WithoutCancel(ctx), nid, rec.Dir)
@@ -195,22 +213,30 @@ func (m *Manager) DeleteCheckpoint(ctx context.Context, sandboxID, nameOrID stri
 func (m *Manager) GC(ctx context.Context) ([]string, error) {
 	m.gcMu.Lock()
 	defer m.gcMu.Unlock()
-	layers, err := m.Store.UnreferencedLayers(ctx)
-	if err != nil {
-		return nil, err
-	}
 	var done []string
 	var errs []error
-	for _, l := range layers {
-		if err := os.RemoveAll(l.Dir); err != nil {
-			errs = append(errs, err)
-			continue
+	// Rounds: removing a diff layer can leave the layer under it unused.
+	for round := 0; round < 10000; round++ {
+		layers, err := m.Store.UnreferencedLayers(ctx)
+		if err != nil {
+			return done, err
 		}
-		if err := m.Store.DeleteLayer(ctx, l.ID); err != nil {
-			errs = append(errs, err)
-			continue
+		removed := 0
+		for _, l := range layers {
+			if err := os.RemoveAll(l.Dir); err != nil {
+				errs = append(errs, err)
+				continue
+			}
+			if err := m.Store.DeleteLayer(ctx, l.ID); err != nil {
+				errs = append(errs, err)
+				continue
+			}
+			done = append(done, l.ID)
+			removed++
 		}
-		done = append(done, l.ID)
+		if removed == 0 {
+			break
+		}
 	}
 	return done, errors.Join(errs...)
 }
@@ -240,11 +266,17 @@ func (m *Manager) stopVM(_ context.Context, id string) error {
 
 // restoreVM restores rec's VM into its existing namespace: restore,
 // resume, agent, identity.
-func (m *Manager) restoreVM(ctx context.Context, c *Created, snapDir, mem, disk string) error {
+func (m *Manager) restoreVM(ctx context.Context, c *Created, snapDir string, mem memSource, disk string) error {
 	rec := c.Sandbox
 	t := time.Now()
-	v, err := m.VMs.Restore(ctx, snapDir, vm.MemBackend{Kind: vm.MemFile, Path: mem},
+	backend, pagerPid := m.backend(ctx, rec, mem)
+	v, err := m.VMs.Restore(ctx, snapDir, backend,
 		vm.Config{ID: rec.ID, Rootfs: vm.Drive{Path: disk}, NetNS: netns.Path(rec.ID)})
+	if pid := pagerPid(); pid != 0 {
+		// Recorded even if the restore failed, so cleanup kills it.
+		rec.PagerPid = pid
+		_ = m.Store.SetPager(ctx, rec.ID, pid)
+	}
 	if err != nil {
 		return err
 	}

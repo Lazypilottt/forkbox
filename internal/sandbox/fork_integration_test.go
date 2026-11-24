@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -26,9 +27,17 @@ done
 
 func sh(t *testing.T, m *Manager, id, cmd string) string {
 	t.Helper()
-	r, err := m.Agent(id).Run(context.Background(), agentclient.ExecRequest{Args: []string{"sh", "-c", cmd}, Timeout: 2 * time.Minute}, 0)
+	// A deadline on the whole call: a VM that died must fail the test, not
+	// leave it retrying the connection forever.
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+	r, err := m.Agent(id).Run(ctx, agentclient.ExecRequest{Args: []string{"sh", "-c", cmd}, Timeout: 2 * time.Minute}, 0)
 	if err != nil {
-		t.Fatalf("%s: %s: %v", id, cmd, err)
+		alive := "alive"
+		if rec, gerr := m.Store.GetSandbox(context.Background(), id); gerr != nil || !m.VMs.Alive(rec.Pid, id) {
+			alive = "NOT running"
+		}
+		t.Fatalf("%s: %s: %v\nVM %s; console tail:\n%s", id, cmd, err, alive, consoleTail(m, id))
 	}
 	if r.Code != 0 {
 		t.Fatalf("%s: %s: exit %d: %s", id, cmd, r.Code, r.Stderr)
@@ -156,4 +165,16 @@ func TestIntegrationForkTen(t *testing.T) {
 	if fi, err := os.Stat(lin[0].Mem); err != nil || fi.Mode().Perm() != 0o440 {
 		t.Errorf("layer memory file: %v %v", fi, err)
 	}
+}
+
+// consoleTail is the end of a VM's serial console and Firecracker log.
+func consoleTail(m *Manager, id string) string {
+	b, err := os.ReadFile(filepath.Join(m.DataDir, "vms", id, "console.log"))
+	if err != nil {
+		return "(" + err.Error() + ")"
+	}
+	if len(b) > 3000 {
+		b = b[len(b)-3000:]
+	}
+	return string(b)
 }

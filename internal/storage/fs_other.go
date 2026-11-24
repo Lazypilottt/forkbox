@@ -26,3 +26,6 @@ type MergeStats struct {
 
 // MergeDiff needs Linux.
 func MergeDiff(base, diff, out string) (*MergeStats, error) { return nil, ErrUnsupportedOS }
+
+// DataBytes needs Linux.
+func DataBytes(path string) (int64, error) { return 0, ErrUnsupportedOS }

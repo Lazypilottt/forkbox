@@ -184,7 +184,14 @@ type MemBackend struct {
 	// Path is the memory file for MemFile; empty means the snapshot's own
 	// mem file. The file must never change while a VM uses it.
 	Path string
+	// Start, for MemUffd, starts the page server listening on socket (the
+	// host path of the jail's /uffd.sock) and returns once it listens.
+	// Firecracker connects to it during the snapshot load.
+	Start func(socket string) error
 }
+
+// UffdSocket is the host path of a VM's page-server socket.
+func UffdSocket(dataDir, id string) string { return layout{dataDir, id}.host(jailUffd) }
 
 // Restore starts a VM from a full snapshot in a new jail. The snapshot's
 // drive and vsock paths are the same in every jail, so cfg.Rootfs is linked
@@ -196,7 +203,9 @@ func (m *Manager) Restore(ctx context.Context, snapshotDir string, mem MemBacken
 	if err != nil {
 		return nil, err
 	}
-	if snap.Type != SnapshotFull {
+	// A diff snapshot's VM state is usable with a page server, which serves
+	// the memory from the whole layer chain; with a memory file it is not.
+	if snap.Type != SnapshotFull && mem.Kind != MemUffd {
 		return nil, fmt.Errorf("vm: restore %s: a %s snapshot is not resumable on its own; merge it into a full snapshot first", snapshotDir, snap.Type)
 	}
 	if m.o.FirecrackerVersion != "" && snap.FirecrackerVersion != "" && snap.FirecrackerVersion != m.o.FirecrackerVersion {
@@ -220,7 +229,9 @@ func (m *Manager) Restore(ctx context.Context, snapshotDir string, mem MemBacken
 			mem.Path = filepath.Join(snapshotDir, SnapshotMemFile)
 		}
 	case MemUffd:
-		return nil, errors.New("vm: the uffd memory backend is not built yet (Task 12)")
+		if mem.Start == nil {
+			return nil, configErr("the uffd memory backend needs a page server (MemBackend.Start)")
+		}
 	default:
 		return nil, configErr("unknown memory backend %q", mem.Kind)
 	}
@@ -237,6 +248,9 @@ func (m *Manager) Restore(ctx context.Context, snapshotDir string, mem MemBacken
 		if err := v.linkInto(filepath.Join(snapshotDir, SnapshotStateFile), jailRestVM); err != nil {
 			return err
 		}
+		if mem.Kind == MemUffd {
+			return mem.Start(v.l.host(jailUffd))
+		}
 		return v.linkInto(mem.Path, jailRestMem)
 	}); err != nil {
 		return nil, v.abort(err)
@@ -252,6 +266,9 @@ func (m *Manager) Restore(ctx context.Context, snapshotDir string, mem MemBacken
 		MemBackend:      memBackend{BackendType: string(MemFile), BackendPath: jailRestMem},
 		TrackDirtyPages: true, // not saved in snapshots; must be set again
 		ResumeVM:        false,
+	}
+	if mem.Kind == MemUffd {
+		load.MemBackend = memBackend{BackendType: string(MemUffd), BackendPath: jailUffd}
 	}
 	if err := v.api.do(ctx, m.o.SnapshotTimeout, "PUT", "/snapshot/load", load, nil); err != nil {
 		// Firecracker exits after a failed load.

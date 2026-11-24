@@ -40,6 +40,15 @@ type Manager struct {
 	// ExposeAddr is the host address port forwards listen on (default
 	// 127.0.0.1; set 0.0.0.0 to publish previews).
 	ExposeAddr string
+	// MemoryBackend is how forks and checkpoints keep memory: BackendMerge
+	// (default) or BackendUffd.
+	MemoryBackend string
+	// Prefetch makes page servers copy the newest layer before the first
+	// fault (uffd backend).
+	Prefetch bool
+	// PagerBinary runs the page server ("<it> pagesrv ..."); default: this
+	// executable (forkboxd).
+	PagerBinary string
 	// AgentTimeout bounds the wait for the agent after resume (default 30 s).
 	AgentTimeout time.Duration
 	Log          *log.Logger
@@ -157,7 +166,7 @@ func (m *Manager) create(ctx context.Context, tpl *template.Template, rec *store
 	}
 	c.Timings.Disk = time.Since(t)
 	mem := filepath.Join(tpl.SnapshotDir(), vm.SnapshotMemFile)
-	if err := m.restoreInto(ctx, c, tpl.SnapshotDir(), mem, disk); err != nil {
+	if err := m.restoreInto(ctx, c, tpl.SnapshotDir(), memSource{File: mem}, disk); err != nil {
 		return nil, err
 	}
 	c.Identity.TemplateID, c.Identity.TemplateMem = tpl.ID, mem
@@ -167,7 +176,7 @@ func (m *Manager) create(ctx context.Context, tpl *template.Template, rec *store
 // restoreInto brings up rec's VM from a snapshot (vmstate in snapDir, the
 // memory file mem, the root disk disk): network, restore, resume, agent,
 // identity. Used by Create and by Fork.
-func (m *Manager) restoreInto(ctx context.Context, c *Created, snapDir, mem, disk string) error {
+func (m *Manager) restoreInto(ctx context.Context, c *Created, snapDir string, mem memSource, disk string) error {
 	rec := c.Sandbox
 	// The namespace's tap has the name, address and MAC the snapshot expects.
 	t := time.Now()
@@ -265,6 +274,9 @@ func (m *Manager) cleanup(ctx context.Context, id, dir string) error {
 	ls := m.listeners[id]
 	delete(m.listeners, id)
 	m.mu.Unlock()
+	if rec, err := m.Store.GetSandbox(context.WithoutCancel(ctx), id); err == nil {
+		defer killPager(rec.PagerPid, id) // after the VM: it may still fault
+	}
 	for _, l := range ls {
 		l.Close()
 	}
@@ -315,8 +327,14 @@ func (m *Manager) Recover(ctx context.Context) (*RecoverReport, error) {
 	var errs []error
 	for _, r := range recs {
 		known[r.ID] = true
-		if r.State == store.StateRunning && m.VMs.Alive(r.Pid, r.ID) {
+		// A uffd-backed VM whose page server is gone would hang on its next
+		// fault: reap it instead.
+		pagerOK := r.PagerPid == 0 || pagerAlive(r.PagerPid, r.ID)
+		if r.State == store.StateRunning && m.VMs.Alive(r.Pid, r.ID) && pagerOK {
 			rep.Adopted = append(rep.Adopted, r.ID)
+			if r.PagerPid != 0 {
+				m.watchAdoptedPager(r.ID, r.PagerPid)
+			}
 			// A daemon killed mid-fork or mid-checkpoint can leave the
 			// parent paused, and its diff half-written.
 			if tpl, err := template.Get(m.DataDir, r.Template); err == nil {

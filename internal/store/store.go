@@ -71,6 +71,7 @@ var migrations = []string{
 		created_at    INTEGER NOT NULL,
 		UNIQUE (sandbox_id, name)
 	);`,
+	`ALTER TABLE sandboxes ADD COLUMN pager_pid INTEGER NOT NULL DEFAULT 0;`,
 }
 
 // Open opens (creating if needed) the database at path and migrates it.
@@ -151,6 +152,9 @@ type Sandbox struct {
 	// BaseLayer is the memory layer the VM's next diff is relative to: the
 	// template id for a sandbox restored from a template, else a layer id.
 	BaseLayer string
+	// PagerPid is the page server serving the VM's memory (uffd backend),
+	// or 0 when the kernel maps a memory file.
+	PagerPid int
 }
 
 // Expired reports whether the sandbox's TTL has run out at now.
@@ -172,10 +176,10 @@ func (s *Store) InsertSandbox(ctx context.Context, sb *Sandbox) error {
 	}
 	sb.UpdatedAt = now
 	_, err := s.db.ExecContext(ctx, `INSERT INTO sandboxes
-		(id, template, template_name, parent, state, dir, jail, cgroup, vsock, pid, created_at, updated_at, ttl_s, error, base_layer)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		(id, template, template_name, parent, state, dir, jail, cgroup, vsock, pid, created_at, updated_at, ttl_s, error, base_layer, pager_pid)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		sb.ID, sb.Template, sb.TemplateName, sb.Parent, sb.State, sb.Dir, sb.Jail, sb.Cgroup, sb.Vsock, sb.Pid,
-		sb.CreatedAt.UnixNano(), sb.UpdatedAt.UnixNano(), int64(sb.TTL/time.Second), sb.Error, sb.BaseLayer)
+		sb.CreatedAt.UnixNano(), sb.UpdatedAt.UnixNano(), int64(sb.TTL/time.Second), sb.Error, sb.BaseLayer, sb.PagerPid)
 	if err != nil && isConstraint(err) {
 		return fmt.Errorf("%w: %s", ErrExists, sb.ID)
 	}
@@ -226,7 +230,7 @@ func (s *Store) ListSandboxes(ctx context.Context) ([]*Sandbox, error) {
 	return scanSandboxes(rows)
 }
 
-const selectSandbox = `SELECT id, template, template_name, parent, state, dir, jail, cgroup, vsock, pid, created_at, updated_at, ttl_s, error, base_layer FROM sandboxes`
+const selectSandbox = `SELECT id, template, template_name, parent, state, dir, jail, cgroup, vsock, pid, created_at, updated_at, ttl_s, error, base_layer, pager_pid FROM sandboxes`
 
 func scanSandboxes(rows *sql.Rows) ([]*Sandbox, error) {
 	defer rows.Close()
@@ -235,7 +239,7 @@ func scanSandboxes(rows *sql.Rows) ([]*Sandbox, error) {
 		var sb Sandbox
 		var created, updated, ttl int64
 		if err := rows.Scan(&sb.ID, &sb.Template, &sb.TemplateName, &sb.Parent, &sb.State, &sb.Dir, &sb.Jail, &sb.Cgroup,
-			&sb.Vsock, &sb.Pid, &created, &updated, &ttl, &sb.Error, &sb.BaseLayer); err != nil {
+			&sb.Vsock, &sb.Pid, &created, &updated, &ttl, &sb.Error, &sb.BaseLayer, &sb.PagerPid); err != nil {
 			return nil, err
 		}
 		sb.CreatedAt, sb.UpdatedAt = time.Unix(0, created), time.Unix(0, updated)
@@ -351,7 +355,10 @@ func (s *Store) PortForwards(ctx context.Context, sandboxID string) ([]PortForwa
 
 // Layer kinds.
 const (
-	LayerFork = "fork" // a parent's memory at a fork: its base plus a diff
+	LayerFork = "fork" // a full memory file: the base plus a diff, merged
+	// LayerDiff is a diff snapshot kept as it is (uffd backend): only the
+	// pages dirtied since Parent, served on top of Parent's chain.
+	LayerDiff = "diff"
 )
 
 // Layer is a memory layer: a full memory file (and the VM state taken with
@@ -511,7 +518,8 @@ func (s *Store) DeleteCheckpoint(ctx context.Context, id string) error {
 func (s *Store) UnreferencedLayers(ctx context.Context) ([]*Layer, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT id FROM layers l
 		WHERE NOT EXISTS (SELECT 1 FROM sandboxes s WHERE s.base_layer = l.id)
-		  AND NOT EXISTS (SELECT 1 FROM checkpoints c WHERE c.layer = l.id)`)
+		  AND NOT EXISTS (SELECT 1 FROM checkpoints c WHERE c.layer = l.id)
+		  AND NOT EXISTS (SELECT 1 FROM layers d WHERE d.parent = l.id AND d.kind = 'diff')`)
 	if err != nil {
 		return nil, err
 	}
@@ -547,4 +555,13 @@ func (s *Store) LayerRefs(ctx context.Context, id string) (int, error) {
 func (s *Store) DeleteLayer(ctx context.Context, id string) error {
 	_, err := s.db.ExecContext(ctx, `DELETE FROM layers WHERE id = ?`, id)
 	return err
+}
+
+// SetPager records a sandbox's page server pid.
+func (s *Store) SetPager(ctx context.Context, sandboxID string, pid int) error {
+	res, err := s.db.ExecContext(ctx, `UPDATE sandboxes SET pager_pid = ?, updated_at = ? WHERE id = ?`, pid, time.Now().UnixNano(), sandboxID)
+	if err != nil {
+		return err
+	}
+	return mustAffect(res, sandboxID)
 }

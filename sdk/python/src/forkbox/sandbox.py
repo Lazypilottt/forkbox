@@ -201,6 +201,9 @@ class Sandbox:
     parent: str = ""
     timings: CreateTimings | None = None
     last_fork: ForkTimings | None = None
+    # Page server counters (faults, copied, zeroed, fault_p50_us, ...) for a
+    # sandbox whose memory is served from a layer chain; from get().
+    pager: dict[str, float] | None = None
     _client: Client = field(default_factory=default_client, repr=False, compare=False)
 
     @property
@@ -219,6 +222,7 @@ class Sandbox:
             id=m.id, template=m.template, template_id=m.template_id, state=m.state, pid=m.pid,
             created_at=datetime.fromtimestamp(m.created_at_unix_ms / 1000, tz=timezone.utc),
             ttl=m.ttl_s or None, parent=m.parent, timings=t, _client=client,
+            pager={f.name: v for f, v in m.pager.ListFields()} if m.HasField("pager") else None,
         )
 
     @classmethod
@@ -314,14 +318,20 @@ class Sandbox:
             raise CommandError(f"command failed with exit code {result.exit_code}: {result.stderr.strip()[:500]}", result)
         return result
 
-    def fork(self, n: int, *, concurrency: int = 0) -> list[Sandbox]:
+    def fork(self, n: int, *, concurrency: int = 0, memory_backend: str | None = None, prefetch: bool | None = None) -> list[Sandbox]:
         """Fork this running sandbox into ``n`` children. Each continues from
         this sandbox's memory, processes and files at the moment of the fork;
-        this sandbox keeps running. Timings are kept in ``last_fork``."""
+        this sandbox keeps running. Timings are kept in ``last_fork``.
+
+        ``memory_backend`` overrides the daemon's setting: ``"merge"`` merges
+        the parent's dirty pages into a shared memory file, ``"uffd"`` keeps
+        them as a layer that a page server serves from (no copying).
+        ``prefetch`` (uffd) copies those pages before the child asks."""
+        req = pb.ForkSandboxRequest(id=self.id, n=n, concurrency=concurrency, memory_backend=memory_backend or "")
+        if prefetch is not None:
+            req.prefetch = prefetch
         try:
-            r = self._client.stub.ForkSandbox(
-                pb.ForkSandboxRequest(id=self.id, n=n, concurrency=concurrency), metadata=self._client.metadata
-            )
+            r = self._client.stub.ForkSandbox(req, metadata=self._client.metadata)
         except grpc.RpcError as e:
             raise from_rpc(e) from None
         t = r.timings

@@ -19,6 +19,7 @@ const (
 	jailRestDir  = "/restore" // read-only inputs of a restore
 	jailRestVM   = jailRestDir + "/vmstate"
 	jailRestMem  = jailRestDir + "/mem"
+	jailUffd     = "/uffd.sock"  // the page server's socket (uffd backend)
 	execFileName = "firecracker" // the jailer names the jail after the exec file
 )
 

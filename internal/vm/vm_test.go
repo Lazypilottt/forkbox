@@ -290,9 +290,18 @@ func TestRestoreRefusals(t *testing.T) {
 	must(t, v.Stop())
 
 	rc := Config{Rootfs: cfg.Rootfs}
-	if _, err := m.Restore(ctx, dir, MemBackend{Kind: MemUffd, Path: "/x"}, rc); err == nil || !strings.Contains(err.Error(), "Task 12") {
-		t.Errorf("uffd backend: got %v", err)
+	if _, err := m.Restore(ctx, dir, MemBackend{Kind: MemUffd}, rc); !errors.Is(err, ErrConfig) {
+		t.Errorf("uffd backend without a page server: got %v", err)
 	}
+	// With a page server, the load names the socket in the jail.
+	var sock string
+	r, err := m.Restore(ctx, dir, MemBackend{Kind: MemUffd, Start: func(s string) error { sock = s; return os.WriteFile(s, nil, 0o600) }}, rc)
+	must(t, err)
+	if sock != UffdSocket(h.dataDir, r.ID()) {
+		t.Errorf("page server socket %q", sock)
+	}
+	checkBody(t, h.last().configRequests()[0], map[string]any{"mem_backend": map[string]any{"backend_type": "Uffd", "backend_path": "/uffd.sock"}})
+	must(t, r.Stop())
 	bad := rc
 	bad.VCPUs = 4
 	if _, err := m.Restore(ctx, dir, MemBackend{}, bad); !errors.Is(err, ErrConfig) {
@@ -305,9 +314,9 @@ func TestRestoreRefusals(t *testing.T) {
 	if _, err := m.Restore(ctx, filepath.Join(h.dataDir, "nope"), MemBackend{}, rc); err == nil {
 		t.Errorf("missing snapshot accepted")
 	}
-	// Nothing was launched for any refusal.
-	if n := len(h.procs); n != 1 {
-		t.Errorf("%d launches, want 1", n)
+	// Nothing was launched for any refusal (the boot and the uffd restore).
+	if n := len(h.procs); n != 2 {
+		t.Errorf("%d launches, want 2", n)
 	}
 }
 

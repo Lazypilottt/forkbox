@@ -33,7 +33,8 @@ type Backend interface {
 	Destroy(ctx context.Context, id string) error
 	Agent(id string) *agentclient.Client
 	Expose(ctx context.Context, id string, guestPort, hostPort int) (int, error)
-	Fork(ctx context.Context, id string, n, concurrency int) (*sandbox.ForkResult, error)
+	ForkWith(ctx context.Context, id string, o sandbox.ForkOptions) (*sandbox.ForkResult, error)
+	PagerStats(id string) (map[string]any, error)
 	Checkpoint(ctx context.Context, id, name string) (*store.Checkpoint, *sandbox.ForkTimings, error)
 	Checkpoints(ctx context.Context, id string) ([]*store.Checkpoint, error)
 	Rewind(ctx context.Context, id, name string) (*sandbox.Created, error)
@@ -76,7 +77,16 @@ func (s *Server) GetSandbox(ctx context.Context, r *pb.GetSandboxRequest) (*pb.S
 	if err != nil {
 		return nil, toStatus(err)
 	}
-	return toPB(sb), nil
+	out := toPB(sb)
+	if st, err := s.B.PagerStats(r.Id); err == nil && st != nil {
+		f := func(k string) float64 { v, _ := st[k].(float64); return v }
+		out.Pager = &pb.PagerStats{
+			Faults: uint64(f("faults")), Copied: uint64(f("copied")), Zeroed: uint64(f("zeroed")),
+			Prefetched: uint64(f("prefetched")), FaultP50Us: f("fault_p50_us"), FaultP99Us: f("fault_p99_us"),
+			Layers: uint32(f("layers")), PrefetchMs: f("prefetch_ms"),
+		}
+	}
+	return out, nil
 }
 
 func (s *Server) ListSandboxes(ctx context.Context, _ *pb.ListSandboxesRequest) (*pb.ListSandboxesResponse, error) {
@@ -113,13 +123,13 @@ func (s *Server) ForkSandbox(ctx context.Context, r *pb.ForkSandboxRequest) (*pb
 	if r.N < 1 || r.N > sandbox.MaxFork {
 		return nil, status.Errorf(codes.InvalidArgument, "n must be 1 to %d", sandbox.MaxFork)
 	}
-	res, err := s.B.Fork(ctx, r.Id, int(r.N), int(r.Concurrency))
+	res, err := s.B.ForkWith(ctx, r.Id, sandbox.ForkOptions{N: int(r.N), Concurrency: int(r.Concurrency), Backend: r.MemoryBackend, Prefetch: r.Prefetch})
 	if err != nil {
 		return nil, toStatus(err)
 	}
 	ms := func(d time.Duration) float64 { return float64(d.Microseconds()) / 1000 }
 	tm := res.Timings
-	out := &pb.ForkSandboxResponse{Layer: res.Layer, Timings: &pb.ForkTimings{
+	out := &pb.ForkSandboxResponse{Layer: res.Layer, MemoryBackend: res.Backend, Timings: &pb.ForkTimings{
 		PauseMs: ms(tm.Pause), SnapshotMs: ms(tm.Snapshot), DisksMs: ms(tm.Disks), ResumeMs: ms(tm.Resume),
 		ParentPausedMs: ms(tm.ParentPaused), MergeMs: ms(tm.Merge), TotalMs: ms(tm.Total),
 		DiffBytes: uint64(tm.DiffBytes), DirtyBytes: uint64(tm.DirtyBytes),

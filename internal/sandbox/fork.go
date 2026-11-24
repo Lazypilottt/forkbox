@@ -54,6 +54,7 @@ type ForkTimings struct {
 
 // ForkResult is the outcome of Fork.
 type ForkResult struct {
+	Backend  string
 	Layer    string
 	Children []*Created
 	Timings  ForkTimings
@@ -66,6 +67,19 @@ const MaxFork = 256
 // parent's state at the moment of the fork. concurrency bounds parallel
 // restores (0: the number of CPUs).
 func (m *Manager) Fork(ctx context.Context, parentID string, n, concurrency int) (*ForkResult, error) {
+	return m.ForkWith(ctx, parentID, ForkOptions{N: n, Concurrency: concurrency})
+}
+
+// ForkOptions tune one fork.
+type ForkOptions struct {
+	N, Concurrency int
+	Backend        string // BackendMerge or BackendUffd; "" means the manager's
+	Prefetch       *bool  // uffd: copy the parent's last dirty pages ahead
+}
+
+// ForkWith forks with options.
+func (m *Manager) ForkWith(ctx context.Context, parentID string, o ForkOptions) (*ForkResult, error) {
+	n, concurrency := o.N, o.Concurrency
 	start := time.Now()
 	if n < 1 || n > MaxFork {
 		return nil, fmt.Errorf("%w: fork into 1 to %d children, not %d", vm.ErrConfig, MaxFork, n)
@@ -86,9 +100,15 @@ func (m *Manager) Fork(ctx context.Context, parentID string, n, concurrency int)
 	if err != nil {
 		return nil, err
 	}
-	baseMem, err := m.layerMem(ctx, parent, tpl)
+	backend, err := m.backendFor(ctx, parent, o.Backend)
 	if err != nil {
 		return nil, err
+	}
+	baseMem := ""
+	if backend == BackendMerge {
+		if baseMem, err = m.layerMem(ctx, parent, tpl); err != nil {
+			return nil, err
+		}
 	}
 	v, err := m.vmFor(ctx, parent, tpl)
 	if err != nil {
@@ -96,7 +116,6 @@ func (m *Manager) Fork(ctx context.Context, parentID string, n, concurrency int)
 	}
 
 	res := &ForkResult{Layer: "layer-" + randHex(8)}
-	layerDir := filepath.Join(m.DataDir, "layers", res.Layer)
 	// Children are recorded before the pause, so the pause stays short and
 	// a reaper can always find them.
 	var children []*Created
@@ -128,9 +147,22 @@ func (m *Manager) Fork(ctx context.Context, parentID string, n, concurrency int)
 	for _, c := range children {
 		disks = append(disks, filepath.Join(c.Dir, DiskFile))
 	}
-	if err := m.snapshotLayer(ctx, parent, v, baseMem, res.Layer, disks, &res.Timings); err != nil {
+	if backend == BackendUffd {
+		err = m.snapshotDiffLayer(ctx, parent, v, res.Layer, disks, &res.Timings)
+	} else {
+		err = m.snapshotLayer(ctx, parent, v, baseMem, res.Layer, disks, &res.Timings)
+	}
+	if err != nil {
 		return fail(err)
 	}
+	snapDir, src, err := m.layerSource(ctx, res.Layer, tpl)
+	if err != nil {
+		return fail(err)
+	}
+	if o.Prefetch != nil {
+		src.Prefetch = *o.Prefetch
+	}
+	res.Backend = backend
 
 	// Restore the children, at most concurrency at a time.
 	sem := make(chan struct{}, concurrency)
@@ -143,7 +175,7 @@ func (m *Manager) Fork(ctx context.Context, parentID string, n, concurrency int)
 			sem <- struct{}{}
 			defer func() { <-sem }()
 			t := time.Now()
-			errs[i] = m.restoreInto(ctx, c, layerDir, filepath.Join(layerDir, vm.SnapshotMemFile), filepath.Join(c.Dir, DiskFile))
+			errs[i] = m.restoreInto(ctx, c, snapDir, src, filepath.Join(c.Dir, DiskFile))
 			c.Timings.Total = time.Since(t)
 		}()
 	}
@@ -304,5 +336,94 @@ func (m *Manager) snapshotLayer(ctx context.Context, sb *store.Sandbox, v *vm.VM
 		return err
 	}
 	tm.Merge = time.Since(t)
+	return nil
+}
+
+// backendFor picks the memory backend for a fork or checkpoint of sb. A
+// sandbox whose memory is already a diff chain has no full base to merge
+// onto, so it stays on the page server.
+func (m *Manager) backendFor(ctx context.Context, sb *store.Sandbox, want string) (string, error) {
+	if want == "" {
+		want = m.MemoryBackend
+	}
+	if want == "" {
+		want = BackendMerge
+	}
+	if want != BackendMerge && want != BackendUffd {
+		return "", fmt.Errorf("%w: memory backend %q: use %s or %s", vm.ErrConfig, want, BackendMerge, BackendUffd)
+	}
+	if want == BackendMerge && sb.BaseLayer != "" && !strings.HasPrefix(sb.BaseLayer, "tpl-") {
+		if l, err := m.Store.GetLayer(ctx, sb.BaseLayer); err == nil && l.Kind == store.LayerDiff {
+			return "", fmt.Errorf("%w: sandbox %s's memory is a uffd layer chain; fork it with the %s backend", vm.ErrConfig, sb.ID, BackendUffd)
+		}
+	}
+	return want, nil
+}
+
+// snapshotDiffLayer captures sb as a diff layer (uffd backend): pause,
+// diff snapshot straight into the layer, disk reflinks, resume. Nothing is
+// merged; children's page servers serve the chain.
+func (m *Manager) snapshotDiffLayer(ctx context.Context, sb *store.Sandbox, v *vm.VM, layerID string, disks []string, tm *ForkTimings) error {
+	layerDir := filepath.Join(m.DataDir, "layers", layerID)
+	ok := false
+	defer func() {
+		if !ok {
+			os.RemoveAll(layerDir)
+		}
+	}()
+	tPause := time.Now()
+	if err := v.Pause(ctx); err != nil {
+		return err
+	}
+	tm.Pause = time.Since(tPause)
+	resumed := false
+	defer func() {
+		if !resumed {
+			_ = v.Resume(context.WithoutCancel(ctx))
+		}
+	}()
+	t := time.Now()
+	if _, err := v.SnapshotDiff(ctx, layerDir); err != nil {
+		return err
+	}
+	tm.Snapshot = time.Since(t)
+	t = time.Now()
+	src := filepath.Join(sb.Dir, DiskFile)
+	for _, d := range disks {
+		if err := storage.Reflink(src, d); err != nil {
+			return err
+		}
+	}
+	tm.Disks = time.Since(t)
+	t = time.Now()
+	if err := v.Resume(ctx); err != nil {
+		return err
+	}
+	resumed = true
+	tm.Resume = time.Since(t)
+	tm.ParentPaused = time.Since(tPause)
+
+	t = time.Now()
+	mem := filepath.Join(layerDir, vm.SnapshotMemFile)
+	for _, f := range []string{vm.SnapshotMemFile, vm.SnapshotStateFile} {
+		if err := os.Chmod(filepath.Join(layerDir, f), 0o440); err != nil {
+			return err
+		}
+	}
+	dirty, err := storage.DataBytes(mem)
+	if err != nil {
+		return err
+	}
+	tm.DirtyBytes = dirty
+	if err := m.Store.InsertLayer(ctx, &store.Layer{
+		ID: layerID, Parent: sb.BaseLayer, Kind: store.LayerDiff, Dir: layerDir, Mem: mem, DirtyBytes: dirty, SourceSandbox: sb.ID,
+	}); err != nil {
+		return err
+	}
+	ok = true
+	if err := m.Store.SetBaseLayer(ctx, sb.ID, layerID); err != nil {
+		return err
+	}
+	tm.Merge = time.Since(t) // bookkeeping only: there is no merge
 	return nil
 }

@@ -114,8 +114,14 @@ func parallel(ids []string, f func(id string)) {
 	wg.Wait()
 }
 
-func TestIntegrationCloneCorrectness(t *testing.T) {
+func TestIntegrationCloneCorrectness(t *testing.T) { cloneSuite(t, BackendMerge) }
+
+// With the page server: children's memory is served from the layer chain.
+func TestIntegrationCloneCorrectnessUffd(t *testing.T) { cloneSuite(t, BackendUffd) }
+
+func cloneSuite(t *testing.T, backend string) {
 	m := newTestManager(t)
+	m.MemoryBackend = backend
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
 	defer cancel()
 	parent, err := m.Create(ctx, CreateOptions{Template: "python"})

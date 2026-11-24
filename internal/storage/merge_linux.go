@@ -120,3 +120,34 @@ func copyRange(ifd, ofd int, off, n int64) error {
 	}
 	return nil
 }
+
+// DataBytes is how many bytes of path are data (not holes).
+func DataBytes(path string) (int64, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return 0, err
+	}
+	defer f.Close()
+	st, err := f.Stat()
+	if err != nil {
+		return 0, err
+	}
+	fd := int(f.Fd())
+	var n, off int64
+	for off < st.Size() {
+		start, err := unix.Seek(fd, off, unix.SEEK_DATA)
+		if errors.Is(err, unix.ENXIO) {
+			break
+		}
+		if err != nil {
+			return 0, err
+		}
+		end, err := unix.Seek(fd, start, unix.SEEK_HOLE)
+		if err != nil {
+			return 0, err
+		}
+		n += end - start
+		off = end
+	}
+	return n, nil
+}

@@ -55,7 +55,12 @@ func newTestManager(t *testing.T) *Manager {
 	if err := nm.EnsureHost(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	return New(data, vms, st, nm)
+	m := New(data, vms, st, nm)
+	// The page server runs as `forkboxd pagesrv` (built by make integration).
+	if bin, err := filepath.Abs("../../bin/forkboxd"); err == nil {
+		m.PagerBinary = bin
+	}
+	return m
 }
 
 func TestIntegrationCreateTwenty(t *testing.T) {

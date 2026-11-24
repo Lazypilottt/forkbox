@@ -238,3 +238,30 @@ func TestCheckpointsAndLayerRefs(t *testing.T) {
 		t.Errorf("checkpoints left: %v", list)
 	}
 }
+
+func TestDiffLayersKeepTheirParents(t *testing.T) {
+	s, _ := open(t)
+	ctx := context.Background()
+	s.InsertLayer(ctx, &Layer{ID: "full", Kind: LayerFork, Dir: "/f", Mem: "/f/mem"})
+	s.InsertLayer(ctx, &Layer{ID: "d1", Parent: "full", Kind: LayerDiff, Dir: "/d1", Mem: "/d1/mem"})
+	s.InsertLayer(ctx, &Layer{ID: "d2", Parent: "d1", Kind: LayerDiff, Dir: "/d2", Mem: "/d2/mem"})
+	s.InsertSandbox(ctx, &Sandbox{ID: "kid", Template: "t", State: StateRunning, BaseLayer: "d2", PagerPid: 77})
+	if un, _ := s.UnreferencedLayers(ctx); len(un) != 0 {
+		t.Errorf("chain layers would be deleted: %v", un)
+	}
+	if sb, _ := s.GetSandbox(ctx, "kid"); sb.PagerPid != 77 {
+		t.Errorf("pager pid %d", sb.PagerPid)
+	}
+	s.SetPager(ctx, "kid", 78)
+	s.DeleteSandbox(ctx, "kid")
+	// d2 goes first; then d1 and full lose their only users.
+	un, _ := s.UnreferencedLayers(ctx)
+	if len(un) != 1 || un[0].ID != "d2" {
+		t.Fatalf("first round %v", un)
+	}
+	s.DeleteLayer(ctx, "d2")
+	un, _ = s.UnreferencedLayers(ctx)
+	if len(un) != 1 || un[0].ID != "d1" {
+		t.Errorf("second round %v", un)
+	}
+}

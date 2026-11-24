@@ -7,7 +7,7 @@ from typing import ClassVar as _ClassVar, Optional as _Optional, Union as _Union
 DESCRIPTOR: _descriptor.FileDescriptor
 
 class Sandbox(_message.Message):
-    __slots__ = ("id", "template", "template_id", "parent", "state", "created_at_unix_ms", "ttl_s", "pid", "timings")
+    __slots__ = ("id", "template", "template_id", "parent", "state", "created_at_unix_ms", "ttl_s", "pid", "timings", "pager")
     ID_FIELD_NUMBER: _ClassVar[int]
     TEMPLATE_FIELD_NUMBER: _ClassVar[int]
     TEMPLATE_ID_FIELD_NUMBER: _ClassVar[int]
@@ -17,6 +17,7 @@ class Sandbox(_message.Message):
     TTL_S_FIELD_NUMBER: _ClassVar[int]
     PID_FIELD_NUMBER: _ClassVar[int]
     TIMINGS_FIELD_NUMBER: _ClassVar[int]
+    PAGER_FIELD_NUMBER: _ClassVar[int]
     id: str
     template: str
     template_id: str
@@ -26,7 +27,28 @@ class Sandbox(_message.Message):
     ttl_s: int
     pid: int
     timings: CreateTimings
-    def __init__(self, id: _Optional[str] = ..., template: _Optional[str] = ..., template_id: _Optional[str] = ..., parent: _Optional[str] = ..., state: _Optional[str] = ..., created_at_unix_ms: _Optional[int] = ..., ttl_s: _Optional[int] = ..., pid: _Optional[int] = ..., timings: _Optional[_Union[CreateTimings, _Mapping]] = ...) -> None: ...
+    pager: PagerStats
+    def __init__(self, id: _Optional[str] = ..., template: _Optional[str] = ..., template_id: _Optional[str] = ..., parent: _Optional[str] = ..., state: _Optional[str] = ..., created_at_unix_ms: _Optional[int] = ..., ttl_s: _Optional[int] = ..., pid: _Optional[int] = ..., timings: _Optional[_Union[CreateTimings, _Mapping]] = ..., pager: _Optional[_Union[PagerStats, _Mapping]] = ...) -> None: ...
+
+class PagerStats(_message.Message):
+    __slots__ = ("faults", "copied", "zeroed", "prefetched", "fault_p50_us", "fault_p99_us", "layers", "prefetch_ms")
+    FAULTS_FIELD_NUMBER: _ClassVar[int]
+    COPIED_FIELD_NUMBER: _ClassVar[int]
+    ZEROED_FIELD_NUMBER: _ClassVar[int]
+    PREFETCHED_FIELD_NUMBER: _ClassVar[int]
+    FAULT_P50_US_FIELD_NUMBER: _ClassVar[int]
+    FAULT_P99_US_FIELD_NUMBER: _ClassVar[int]
+    LAYERS_FIELD_NUMBER: _ClassVar[int]
+    PREFETCH_MS_FIELD_NUMBER: _ClassVar[int]
+    faults: int
+    copied: int
+    zeroed: int
+    prefetched: int
+    fault_p50_us: float
+    fault_p99_us: float
+    layers: int
+    prefetch_ms: float
+    def __init__(self, faults: _Optional[int] = ..., copied: _Optional[int] = ..., zeroed: _Optional[int] = ..., prefetched: _Optional[int] = ..., fault_p50_us: _Optional[float] = ..., fault_p99_us: _Optional[float] = ..., layers: _Optional[int] = ..., prefetch_ms: _Optional[float] = ...) -> None: ...
 
 class CreateTimings(_message.Message):
     __slots__ = ("total_ms", "disk_ms", "restore_ms", "resume_ms", "agent_ms", "identity_ms")
@@ -183,14 +205,18 @@ class ExposePortRequest(_message.Message):
     def __init__(self, sandbox_id: _Optional[str] = ..., guest_port: _Optional[int] = ..., host_port: _Optional[int] = ...) -> None: ...
 
 class ForkSandboxRequest(_message.Message):
-    __slots__ = ("id", "n", "concurrency")
+    __slots__ = ("id", "n", "concurrency", "memory_backend", "prefetch")
     ID_FIELD_NUMBER: _ClassVar[int]
     N_FIELD_NUMBER: _ClassVar[int]
     CONCURRENCY_FIELD_NUMBER: _ClassVar[int]
+    MEMORY_BACKEND_FIELD_NUMBER: _ClassVar[int]
+    PREFETCH_FIELD_NUMBER: _ClassVar[int]
     id: str
     n: int
     concurrency: int
-    def __init__(self, id: _Optional[str] = ..., n: _Optional[int] = ..., concurrency: _Optional[int] = ...) -> None: ...
+    memory_backend: str
+    prefetch: bool
+    def __init__(self, id: _Optional[str] = ..., n: _Optional[int] = ..., concurrency: _Optional[int] = ..., memory_backend: _Optional[str] = ..., prefetch: _Optional[bool] = ...) -> None: ...
 
 class ForkTimings(_message.Message):
     __slots__ = ("pause_ms", "snapshot_ms", "disks_ms", "resume_ms", "parent_paused_ms", "merge_ms", "restore_ms", "total_ms", "diff_bytes", "dirty_bytes")
@@ -217,14 +243,16 @@ class ForkTimings(_message.Message):
     def __init__(self, pause_ms: _Optional[float] = ..., snapshot_ms: _Optional[float] = ..., disks_ms: _Optional[float] = ..., resume_ms: _Optional[float] = ..., parent_paused_ms: _Optional[float] = ..., merge_ms: _Optional[float] = ..., restore_ms: _Optional[_Iterable[float]] = ..., total_ms: _Optional[float] = ..., diff_bytes: _Optional[int] = ..., dirty_bytes: _Optional[int] = ...) -> None: ...
 
 class ForkSandboxResponse(_message.Message):
-    __slots__ = ("children", "timings", "layer")
+    __slots__ = ("children", "timings", "layer", "memory_backend")
     CHILDREN_FIELD_NUMBER: _ClassVar[int]
     TIMINGS_FIELD_NUMBER: _ClassVar[int]
     LAYER_FIELD_NUMBER: _ClassVar[int]
+    MEMORY_BACKEND_FIELD_NUMBER: _ClassVar[int]
     children: _containers.RepeatedCompositeFieldContainer[Sandbox]
     timings: ForkTimings
     layer: str
-    def __init__(self, children: _Optional[_Iterable[_Union[Sandbox, _Mapping]]] = ..., timings: _Optional[_Union[ForkTimings, _Mapping]] = ..., layer: _Optional[str] = ...) -> None: ...
+    memory_backend: str
+    def __init__(self, children: _Optional[_Iterable[_Union[Sandbox, _Mapping]]] = ..., timings: _Optional[_Union[ForkTimings, _Mapping]] = ..., layer: _Optional[str] = ..., memory_backend: _Optional[str] = ...) -> None: ...
 
 class Checkpoint(_message.Message):
     __slots__ = ("id", "sandbox_id", "name", "layer", "created_at_unix_ms", "paused_ms", "dirty_bytes")
