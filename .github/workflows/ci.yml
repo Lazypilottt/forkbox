@@ -137,6 +137,19 @@ jobs:
           if [ "${{ matrix.storage }}" = reflink ]; then
             sudo -n bin/forkbox templates build bench/hugepages-template.yaml
           fi
+      # Some nested-virtualization runners stop restored microVMs
+      # (KVM_EXIT_FAIL_ENTRY); find out in a minute instead of 40.
+      - name: host canary (restored microVMs stay up)
+        run: |
+          set +e
+          go test -tags integration -count=1 -v -run TestIntegrationHostCanary \
+            -exec "sudo -n env FORKBOX_CANARY=1 FORKBOX_STORAGE=${{ matrix.storage }}" ./internal/sandbox/ > canary.log 2>&1
+          code=$?
+          cat canary.log
+          if grep -q 'HOST FAULT' canary.log; then
+            echo "::error::This runner ($(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2 | xargs)) stops restored microVMs (KVM_EXIT_FAIL_ENTRY under nested virtualization). Not a Forkbox failure: re-run the job to get another runner."
+          fi
+          exit $code
       - name: integration tests
         run: make integration GOTESTFLAGS="-v -timeout 40m" TESTENV="FORKBOX_STORAGE=${{ matrix.storage }}"
       # Before the workflow's own daemon starts: it starts its own.

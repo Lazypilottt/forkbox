@@ -54,12 +54,15 @@ same instant, only on Intel hosts with AMX. The console log now carries it
 (`9d27b1f`), and Forkbox retries a restore whose VM fails its first entry
 (`d56c290`). Ruled out: memory pressure (no OOM, 14 GB free), AMX/XFD state
 (a CPU template hiding them did not help: run 45411509957), TSC scaling (no
-TSC messages). AMD runners never show it. The host log shows
-`kvm_intel: Using Hyper-V Enlightened VMCS`: nested KVM on these Intel
-runners goes through Hyper-V's enlightened VMCS. It looks like a fault of the
-nested hypervisor; the tests now fail within a second of a VM exiting, and
-the CI kernel-log step greps for KVM and clocksource lines to catch the
-trigger. Acceptance needs an AMD runner or a bare-metal host until then.
+TSC messages). Seen only on Xeon 6975P runners, which are KVM guests
+themselves (KVM-on-KVM); never on AMD EPYC (7763, 9V45) or Xeon 8370C
+(Hyper-V) runners. There it hits any *restored* VM, a plain create
+included (`TestIntegrationCreateTwenty`, run 45422695977), often several
+VMs at the same instant, while booted VMs run fine: a fault of nested
+snapshot restore on that CPU, not of Forkbox. CI now runs a canary first
+(`TestIntegrationHostCanary`: six restored sandboxes, exec for 20 s) that
+fails such a runner in about a minute with an `::error::` naming the CPU;
+re-running the job gets other hardware.
 
 Timings from these runners are fine for regressions but are **not**
 benchmark numbers for the README. Task 6 and Task 16 benchmarks need a
