@@ -252,9 +252,11 @@ func (m *Manager) finishRestore(ctx context.Context, c *Created, v *vm.VM) error
 	if at <= 0 {
 		at = 30 * time.Second
 	}
-	actx, cancel := context.WithTimeout(ctx, at)
+	// The agent calls end when the VM exits: the agent client would
+	// otherwise retry the dead vsock socket until the timeout.
+	actx, cancel := m.whileAlive(ctx, v, at)
+	defer cancel()
 	pong, err := ac.WaitReady(actx)
-	cancel()
 	if err != nil {
 		err = fmt.Errorf("agent did not answer within %s: %w", at, err)
 		if st, serr := m.PagerStats(rec.ID); serr == nil && st != nil {
@@ -280,9 +282,13 @@ func (m *Manager) finishRestore(ctx context.Context, c *Created, v *vm.VM) error
 	if _, err := rand.Read(entropy); err != nil {
 		return err
 	}
-	r, err := ac.Restored(ctx, rec.ID, rec.ID, entropy, ParseLimits(rec.Limits).PidsMax)
+	r, err := ac.Restored(actx, rec.ID, rec.ID, entropy, ParseLimits(rec.Limits).PidsMax)
 	if err != nil {
-		return fmt.Errorf("agent restored: %w", err)
+		err = fmt.Errorf("agent restored: %w", err)
+		if !v.Alive() {
+			err = fmt.Errorf("%w; Firecracker has exited\nconsole:\n%s", err, vm.ConsoleTail(m.DataDir, rec.ID, 1500))
+		}
+		return err
 	}
 	c.Timings.Identity = time.Since(t)
 	c.Identity = &Identity{
@@ -293,6 +299,28 @@ func (m *Manager) finishRestore(ctx context.Context, c *Created, v *vm.VM) error
 	rec.Pid = v.Pid()
 	rec.State = store.StateRunning
 	return m.Store.SetState(ctx, rec.ID, store.StateRunning, rec.Pid, "")
+}
+
+// whileAlive is ctx with timeout d, also canceled once v's Firecracker
+// process exits.
+func (m *Manager) whileAlive(ctx context.Context, v *vm.VM, d time.Duration) (context.Context, context.CancelFunc) {
+	cctx, cancel := context.WithTimeout(ctx, d)
+	go func() {
+		t := time.NewTicker(250 * time.Millisecond)
+		defer t.Stop()
+		for {
+			select {
+			case <-cctx.Done():
+				return
+			case <-t.C:
+				if !v.Alive() {
+					cancel()
+					return
+				}
+			}
+		}
+	}()
+	return cctx, cancel
 }
 
 // Agent is a client for a sandbox's guest agent.

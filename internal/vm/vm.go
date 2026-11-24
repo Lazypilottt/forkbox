@@ -82,6 +82,12 @@ func (v *VM) Pid() int {
 	return v.proc.Pid()
 }
 
+// Alive reports whether the VM's Firecracker process still runs.
+func (v *VM) Alive() bool {
+	pid := v.Pid()
+	return pid > 0 && v.m.Alive(pid, v.id)
+}
+
 // ConsolePath is the file receiving the guest serial console and
 // Firecracker's own log. It is removed by Stop.
 func (v *VM) ConsolePath() string { return v.l.consoleLog() }

@@ -4,6 +4,7 @@ package sandbox
 
 import (
 	"context"
+	"errors"
 	"os"
 	"strings"
 	"testing"
@@ -13,7 +14,7 @@ import (
 )
 
 // TestIntegrationHostCanary checks that this host keeps restored microVMs
-// running: a few sandboxes, exec in each for 20 s. Some nested
+// running: a busy sandbox forked into eight, exec in each for 30 s. Some nested
 // virtualization hosts (seen on Intel Xeon 6975P CI runners) stop
 // restored VMs with KVM_EXIT_FAIL_ENTRY within seconds; CI runs this first
 // (FORKBOX_CANARY=1) so such a runner fails in a minute, not after the
@@ -23,7 +24,7 @@ func TestIntegrationHostCanary(t *testing.T) {
 		t.Skip("set FORKBOX_CANARY=1 (CI runs it before the suite)")
 	}
 	m := newTestManager(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
 	defer cancel()
 	var ids []string
 	t.Cleanup(func() {
@@ -31,14 +32,32 @@ func TestIntegrationHostCanary(t *testing.T) {
 			m.Destroy(context.Background(), id)
 		}
 	})
-	for range 6 {
-		c, err := m.Create(ctx, CreateOptions{Template: "python"})
-		if err != nil {
-			t.Fatal(err)
+	hostFault := func(what string, err error) {
+		t.Helper()
+		if err != nil && strings.Contains(err.Error(), "KVM_EXIT_FAIL_ENTRY") {
+			t.Fatalf("HOST FAULT: KVM could not enter a restored VM (%s: KVM_EXIT_FAIL_ENTRY). This host cannot run restored microVMs reliably; use another one.", what)
 		}
+		if err != nil {
+			t.Fatalf("%s: %v", what, err)
+		}
+	}
+	// What the fault showed up under: a busy parent forked into children
+	// that all keep working.
+	parent, err := m.Create(ctx, CreateOptions{Template: "python"})
+	hostFault("create", err)
+	ids = append(ids, parent.ID)
+	sh(t, m, parent.ID, `setsid python -c "
+import time, numpy
+while True:
+    numpy.random.random(10000).sum(); time.sleep(0.02)
+" >/dev/null 2>&1 < /dev/null &`)
+	time.Sleep(2 * time.Second)
+	fr, err := m.Fork(ctx, parent.ID, 8, 0)
+	hostFault("fork", err)
+	for _, c := range fr.Children {
 		ids = append(ids, c.ID)
 	}
-	for end := time.Now().Add(20 * time.Second); time.Now().Before(end); time.Sleep(time.Second) {
+	for end := time.Now().Add(30 * time.Second); time.Now().Before(end); time.Sleep(time.Second) {
 		for _, id := range ids {
 			rec, err := m.Store.GetSandbox(ctx, id)
 			if err != nil {
@@ -47,7 +66,7 @@ func TestIntegrationHostCanary(t *testing.T) {
 			if !m.VMs.Alive(rec.Pid, id) {
 				console := vm.ConsoleTail(m.DataDir, id, 4096)
 				if strings.Contains(console, "KVM_EXIT_FAIL_ENTRY") {
-					t.Fatalf("HOST FAULT: KVM could not enter the restored VM %s (KVM_EXIT_FAIL_ENTRY). This host cannot run restored microVMs reliably; use another one.", id)
+					hostFault("sandbox "+id, errors.New("KVM_EXIT_FAIL_ENTRY"))
 				}
 				t.Fatalf("restored VM %s exited:\n%s", id, console)
 			}

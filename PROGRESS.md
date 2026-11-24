@@ -64,6 +64,13 @@ snapshot restore on that CPU, not of Forkbox. CI now runs a canary first
 fails such a runner in about a minute with an `::error::` naming the CPU;
 re-running the job gets other hardware.
 
+**Bug found through it (`3f858aa` run):** when a child died during a fork,
+the daemon's identity call (`Restored`) retried the dead VM's vsock socket
+until the caller's deadline (20 minutes in the test) instead of failing.
+The agent calls after a resume now end when Firecracker exits, and are
+bounded by the agent timeout, so the fork fails (or the entry-failure retry
+restores the child again) within a second.
+
 Timings from these runners are fine for regressions but are **not**
 benchmark numbers for the README. Task 6 and Task 16 benchmarks need a
 bare-metal or larger host, recorded with the Firecracker version.
