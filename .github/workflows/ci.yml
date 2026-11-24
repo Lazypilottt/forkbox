@@ -174,7 +174,7 @@ jobs:
           if-no-files-found: ignore
       - name: host kernel log (on failure)
         if: failure()
-        run: sudo -n dmesg -T | grep -iE 'oom|killed process|out of memory|firecracker|segfault|blocked for' | tail -60 || true
+        run: sudo -n dmesg -T | grep -iE 'oom|killed process|out of memory|firecracker|segfault|blocked for|kvm|clocksource|tsc|hyperv' | tail -80 || true
       - name: forkboxd log
         if: always()
         run: sudo -n cat /var/lib/forkbox/forkboxd.log || true

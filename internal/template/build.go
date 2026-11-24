@@ -387,7 +387,6 @@ func (b *Builder) bootAndSnapshot(ctx context.Context, t *Template, staging stri
 		VCPUs:      t.Spec.VCPUs,
 		MemMiB:     t.Spec.MemoryMiB,
 		HugePages:  t.Spec.HugePages,
-		CPUConfig:  t.Spec.CPUConfig(),
 		Kernel:     b.Kernel,
 		KernelArgs: vm.DefaultKernelArgs + " init=" + agent.InstallPath,
 		Rootfs:     vm.Drive{Path: filepath.Join(staging, RootfsFile)},

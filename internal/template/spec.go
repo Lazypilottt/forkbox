@@ -13,7 +13,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -21,7 +20,6 @@ import (
 	"go.yaml.in/yaml/v3"
 
 	"github.com/Lazypilottt/forkbox/internal/netns"
-	"github.com/Lazypilottt/forkbox/internal/vm"
 )
 
 // Spec is a template spec file (templates/*.yaml).
@@ -47,17 +45,6 @@ type Spec struct {
 	// needs a pool: vm.nr_hugepages). Sandboxes then restore through the
 	// page server, one fault per 2 MiB.
 	HugePages string `yaml:"huge_pages,omitempty" json:"huge_pages,omitempty"`
-	// CPUTemplate is "" or "no-amx" (the default: vm.NoAMXCPUConfig hides
-	// Intel AMX from the guest), or "host" for the host's CPUID as is.
-	CPUTemplate string `yaml:"cpu_template,omitempty" json:"cpu_template,omitempty"`
-}
-
-// CPUConfig is the custom CPU template the template's VM boots with.
-func (s *Spec) CPUConfig() json.RawMessage {
-	if s.CPUTemplate == "host" || runtime.GOARCH != "amd64" {
-		return nil
-	}
-	return vm.NoAMXCPUConfig
 }
 
 // File copies a host file (Src, relative to the spec file) into the image.
@@ -158,9 +145,6 @@ func (s *Spec) Validate() error {
 	if s.DiskSizeMiB < 256 {
 		return specErr("disk_size_mib %d: at least 256", s.DiskSizeMiB)
 	}
-	if s.CPUTemplate != "" && s.CPUTemplate != "no-amx" && s.CPUTemplate != "host" {
-		return specErr("cpu_template %q: no-amx (the default) or host", s.CPUTemplate)
-	}
 	if s.HugePages != "" && (s.HugePages != "2M" || s.MemoryMiB%2 != 0) {
 		return specErr("huge_pages %q: use 2M, with an even memory_mib", s.HugePages)
 	}
@@ -197,7 +181,7 @@ func (s *Spec) EnvList() []string {
 
 // FormatVersion changes when the builder makes different images from the
 // same inputs (2: guest network baked in), so old templates are rebuilt.
-const FormatVersion = 3 // 3: CPU template (no-amx by default)
+const FormatVersion = 2
 
 // ID computes the template id: a hash of everything that determines what is
 // built. That is the spec (with copied files by content, not by path),

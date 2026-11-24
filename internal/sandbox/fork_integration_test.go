@@ -31,6 +31,21 @@ func sh(t *testing.T, m *Manager, id, cmd string) string {
 	// leave it retrying the connection forever.
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
+	// A VM that exits (e.g. KVM_EXIT_FAIL_ENTRY on a nested host) fails the
+	// call within a second, not after the agent client's connect retries.
+	go func() {
+		rec, err := m.Store.GetSandbox(ctx, id)
+		if err != nil {
+			return
+		}
+		for ctx.Err() == nil {
+			if !m.VMs.Alive(rec.Pid, id) {
+				cancel()
+				return
+			}
+			time.Sleep(time.Second)
+		}
+	}()
 	r, err := m.Agent(id).Run(ctx, agentclient.ExecRequest{Args: []string{"sh", "-c", cmd}, Timeout: 2 * time.Minute}, 0)
 	if err != nil {
 		alive := "alive"

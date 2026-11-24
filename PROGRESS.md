@@ -10,10 +10,19 @@
 | 6. Daemon API, Python SDK and the first benchmark | **Done.** Accepted on a KVM host (CI run 42208149355). |
 | v0.1 release review | **Done.** Tagged `v0.1.0` (`db0fd83`, CI run 42268098451). |
 | 7. Network manager | **Done.** Accepted on a KVM host (CI run 42269235088). |
-| 8–17 | Not started. |
+| 8. Live fork | **Done.** `TestIntegrationForkTen` green on a KVM host (CI run 45370256276). |
+| 9. Checkpoints and rewind | **Done.** Green on a KVM host (CI run 45370256276). |
+| 10. Clone-correctness suite | **Done (merge backend).** All seven checks green (CI run 45370256276). Intermittent child deaths on Intel runners: see "KVM host". |
+| 11. MCP server | **Built.** Unit tests green; the MCP-against-daemon step and the fork-curve chart wait for a green integration step. |
+| v0.2 review | **In progress.** Chaos and stress tests added (`81a87bd`); `v0.2.0` not tagged yet. |
+| 12. Page server | **Built.** Core and uffd forks green (`TestIntegrationForkUffd`); the flat-curve benchmark waits for a dispatch run. |
+| 13. `race`, async SDK, warm pools | **Built.** Unit tests green; the SDK integration tests (race 20/13, warm-pool p95) wait for a green integration step. |
+| 14. Hardening | **In progress.** Limits, density, reaper sweep, egress, dmthin and hugepages work on KVM hosts; one green run of both jobs (on AMD runners) still to get. |
+| 15–17 | Not started. |
 
-**Resume point:** Task 8. Every push runs the integration tests on real
-Firecracker microVMs (see "KVM host" below).
+**Resume point:** a green CI run of both integration jobs (Task 14
+acceptance), then the v0.2 review and Task 15. Every push runs the integration tests on real
+Firecracker microVMs, on both disk backends (see "KVM host" below).
 
 ## KVM host
 
@@ -34,6 +43,21 @@ Runner as of 2026-11-06:
 - 2 vCPUs, 7.7 GB RAM, Ubuntu 24.04.5, host kernel 7.0.0-1017-azure.
 - It is an Azure VM, so microVMs run under **nested virtualization**.
 - Host kernel 7.0 is newer than the host kernels Firecracker v1.17 validates.
+
+Runners seen since (2026-11-24): 4 vCPUs and 16 GB with an AMD EPYC 7763,
+or an Intel Xeon 6975P-C (Granite Rapids). CI prints the model.
+
+**Nested-virtualization failure on Intel runners.** Restored children
+sometimes stopped a few seconds after resume with `KVM_EXIT_FAIL_ENTRY`
+(hardware reason 7, invalid VM-entry control fields), several VMs at the
+same instant, only on Intel hosts with AMX. The console log now carries it
+(`9d27b1f`), and Forkbox retries a restore whose VM fails its first entry
+(`d56c290`). Ruled out: memory pressure (no OOM, 14 GB free), AMX/XFD state
+(a CPU template hiding them did not help: run 45411509957), TSC scaling (no
+TSC messages). AMD runners never show it. It looks like a fault of the
+nested hypervisor; the tests now fail within a second of a VM exiting, and
+the CI kernel-log step greps for KVM and clocksource lines to catch the
+trigger. Acceptance needs an AMD runner or a bare-metal host until then.
 
 Timings from these runners are fine for regressions but are **not**
 benchmark numbers for the README. Task 6 and Task 16 benchmarks need a
@@ -869,6 +893,142 @@ CI does this in its "host forwarding for sandboxes" step.
 
 ---
 
+## Tasks 8–14 (2026-11-07 to 2026-11-24)
+
+Shorter entries than Tasks 1–7: the details are in the commits and tests
+named here. Numbers are from 2–4 vCPU nested-virtualization CI runners.
+
+### Task 8. Live fork
+
+- `Fork(parent, n)`: pause, diff snapshot (`track_dirty_pages`, written
+  without fsync), reflink the parent's disk for each child, resume, then
+  merge the diff onto the parent's base memory (`storage.MergeDiff`: reflink
+  of the base plus `FICLONERANGE` of each dirty extent) and restore the
+  children in parallel. A second-level fork merges onto the first layer.
+- `TestIntegrationForkTen` (CI run 45370256276): parent paused **52 ms**
+  (pause 0.5 ms, diff snapshot 44.7 ms, disk reflinks 6.3 ms, resume
+  0.5 ms); merge 353 ms for 117 MiB dirty, all shared by `FICLONERANGE`;
+  restore per child 244–524 ms; total 1.41 s. Second-level fork into 2:
+  paused 33 ms, total 708 ms. Each child keeps counting from the parent's
+  value.
+
+### Task 9. Checkpoints and rewind
+
+- `checkpoint(name)` keeps a fork layer and a disk under a name;
+  `rewind(name)` restores the sandbox in place (same id, namespace and port
+  forwards); `restore_as_new` makes a separate sandbox; unreferenced layers
+  are garbage-collected.
+- CI run 45370256276: checkpoint paused the sandbox **13.7 ms** (diff
+  12.3 ms) for 31 MiB dirty; merge 246 ms; rewind **142.5 ms**; deleting a
+  checkpoint freed 268.7 MiB.
+
+### Task 10. Clone-correctness suite
+
+- `internal/sandbox/clone_integration_test.go`: one parent with a
+  long-running Python process (numpy, `random`, `ssl`, `uuid`) and an open
+  keep-alive TCP connection, forked into 50. Checks: kernel randomness
+  (`/dev/urandom`, `getrandom`), user-space generators (through
+  `forkbox_guest.on_restore`), identity (machine-id, hostname, sandbox id;
+  `boot_id` is the parent's, as the docs say), the clock after resume and
+  after 60 s, the network (unique source addresses, the old TCP
+  connection fails cleanly, a new one works), and isolation.
+- All green with the merge backend (CI run 45370256276).
+- The guest kernel has the vmgenid symbols but no driver binds, so the host's
+  `Restored` call (entropy, machine-id, hostname, clock) is what makes
+  clones distinct; `forkbox_guest` reseeds Python on `/run/forkbox/generation`.
+
+### Task 11. MCP server
+
+- `mcp/` (`forkbox-mcp`): tools `create_sandbox`, `exec`, `read_file`,
+  `write_file`, `fork`, `race`, `checkpoint`, `rewind`, `list_sandboxes`,
+  `destroy`; SDK errors become tool errors with the daemon's message.
+- `bench/fork_curve.py` draws the fork-latency curve against `docker run`;
+  it runs on `workflow_dispatch` with `bench=true` (not run yet).
+
+### Task 12. Page server
+
+- `forkboxd pagesrv`: one process per uffd-backed VM, in the VM's cgroup,
+  serving faults from a layer chain (newest diff first, the template's full
+  memory last) through an owner index. Firecracker's handshake gives the
+  regions; balloon removes are honoured; `EAGAIN` faults are retried.
+- Forks with `memory_backend="uffd"` keep the diff as a layer: no merge.
+- `TestIntegrationForkUffd`: parent paused 46 ms, 111.6 MiB dirty kept as a
+  layer, restore per child 224–304 ms; about 29,800 faults per child, p50
+  **4.9 µs**, p99 35–47 µs.
+- **Found in CI:** a uffd child copies every page it touches, the template's
+  included, so 50 children of a 120 MiB parent needed 6 GB and thrashed a
+  7.7 GB runner for 20 minutes. Uffd forks are now counted at the parent's
+  resident memory per child by the density check, and a failed child
+  cancels the others (`7bca744`). The page server now wakes the faulting
+  thread when `UFFDIO_COPY` returns `EEXIST` (`d360337`), after a child hung
+  on a page on an AMD runner.
+
+### Task 13. `race`, async SDK, warm pools
+
+- `Sandbox.race(n, run, check)` and `map`; `forkbox.aio` on `grpc.aio`;
+  warm pools (`forkboxd --warm python=1:8`): paused, pre-restored sandboxes
+  sized by the last 10 minutes of demand within a memory budget.
+- Unit tests green; the integration tests (race 20 with only attempt 13
+  passing, warm-pool create p95) run in the CI steps after the Go
+  integration tests.
+
+### Task 14. Hardening
+
+- **Limits** (`7a0fa26`): per-sandbox `cpus` and `memory_mib` on the VM's
+  cgroup and `pids_max` in the guest (every exec starts in a guest cgroup
+  with `pids.max`); forks inherit them. On a KVM host a 64-process storm
+  under `pids_max=32` stopped with `Cannot fork` and the sandbox kept
+  working. Disk quota is the template's disk size; lifetime is the TTL.
+- **Density**: `--max-sandboxes`, `--min-free-memory-mib` (default 256)
+  and `--per-sandbox-mib`; past them a create or fork fails with
+  `RESOURCE_EXHAUSTED` in **0.2–0.3 ms**.
+- **Reaper sweep**: every 15 s, sandboxes whose Firecracker or page server
+  died are cleaned up and marked failed; counters in `ReapStats`.
+- **Egress** (`cf87d0d`): denied by default. Allow-lists of domains (a name
+  allows its subdomains), IPv4 addresses and CIDRs come from the template
+  (`egress:`) and the create call. Each namespace has an nftables interval
+  set for CIDRs and a timeout set for addresses that allowed names resolve
+  to, filled by a DNS proxy the daemon runs on the namespace's `TapIP:53`;
+  other names get NXDOMAIN. Refused names are logged as they happen;
+  refused destinations are kept in a set and logged by the sweep. Forks
+  inherit the list and the parent's resolved addresses. On a KVM host:
+  `pip install six` through the python template's list (PyPI) took 1.2 s,
+  `curl https://example.com` failed to resolve, `http://1.1.1.1` was
+  blocked and recorded, and `*` still kept the metadata address out.
+- **dmthin** (`af5041f`): `forkboxd --storage dmthin` keeps disks as
+  device-mapper thin snapshots in a pool on loop files in the data
+  directory, so it can be ext4. CI runs the whole integration suite on both
+  backends; on ext4 everything but the uffd clone suite passed in the first
+  run (that one hit the page-server hang fixed above). Cost: the parent
+  stays paused while each child's snapshot is taken (10 children: 376 ms of
+  a 554 ms pause), and memory merges copy (1.66 s for 118 MiB) where they
+  reflinked.
+- **Hugepages** (`d360337`): `huge_pages: 2M` templates restore through the
+  page server, which serves 2 MiB pages assembled from the 4 KiB layers;
+  creates and forks are refused when the hugepage pool cannot hold them.
+  `TestIntegrationHugePages`, one run on an AMD EPYC 9V45 runner (nested,
+  Firecracker v1.17.0; p50 of 3 creates, fork with the uffd backend):
+
+  | template | create ms | first exec ms | warm exec ms | fork into 2 ms | restore per child ms | child's first exec ms |
+  | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+  | python (4 KiB) | 112.0 | 329.8 | 138.2 | 171.7 | 141.6 | 698.4 |
+  | python-huge (2 MiB) | 108.7 | 221.4 | 93.3 | 140.3 | 115.6 | 204.7 |
+
+  The exec is `numpy.ones(4_000_000).sum()`. Huge pages cut the first exec
+  by a third and a uffd child's first exec by 3.4x (one fault per 2 MiB
+  instead of 512). The cost: every page a hugepage sandbox touches is 2 MiB
+  of a fixed pool, and nothing is shared with the template. One run on a
+  nested runner: indicative only.
+
+### Limitations
+
+- dmthin: the pool is a sparse file on the data directory, so its I/O goes
+  through the loop driver and the data directory's filesystem.
+- Egress allows any port on an allowed destination; IPv6 is not routed.
+- A hugepage sandbox is counted at its full guest memory against the pool.
+
+---
+
 ## Blocked
 
 Nothing.
@@ -882,8 +1042,9 @@ Nothing.
    - `squashfs-tools`, `e2fsprogs`.
 
    Not needed before then.
-2. **Actions minutes:** the unit job takes about 30 s and the integration job about 1.5 minutes per push, both
-   billed to the account's private-repo minutes.
+2. **Actions minutes:** each push runs the unit job (about 1 minute) and two
+   integration jobs (reflink and dmthin, about 40 minutes each), billed to
+   the account's private-repo minutes.
 
 ## Ideas
 
@@ -894,7 +1055,12 @@ Nothing.
 - Speed up the post-restore identity step (32 ms): one round trip, and the machine-id written in the background.
 - Registry auth for private base images; debootstrap bases.
 - Detached Exec (survives disconnects; output to a log file) and stdin/TTY support.
-- Per-VM jail uids/gids from a reserved range (Task 14 hardening).
+- Per-VM jail uids/gids from a reserved range.
+- Egress rules per port (`pypi.org:443`), and IPv6.
+- dmthin on a real block device instead of loop files; take children's thin
+  snapshots in one suspend.
+- Share a uffd child's unchanged template pages (map the template file and
+  serve only the diff layers through userfaultfd).
 - Try `--enable-pci` (faster virtio) once snapshot support with PCI is confirmed.
 - Doctor checks for free space in the data dir, hugepages and address-pool
   collisions.

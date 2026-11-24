@@ -74,8 +74,11 @@ func TestIntegrationHugePages(t *testing.T) {
 			last = c.ID
 		}
 		r.create, r.firstExec, r.warmExec = p50(creates), p50(first), p50(warm)
-		if st, _ := m.PagerStats(last); st != nil {
-			r.faults, _ = st["faults"].(float64)
+		// The page server rewrites its stats file every second.
+		for deadline := time.Now().Add(3 * time.Second); r.faults == 0 && time.Now().Before(deadline); time.Sleep(200 * time.Millisecond) {
+			if st, _ := m.PagerStats(last); st != nil {
+				r.faults, _ = st["faults"].(float64)
+			}
 		}
 		fr, err := m.ForkWith(ctx, last, ForkOptions{N: 2, Backend: BackendUffd})
 		if err != nil {

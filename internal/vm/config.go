@@ -1,7 +1,6 @@
 package vm
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -41,25 +40,7 @@ type Config struct {
 	// hugetlbfs pages from the host's pool (vm.nr_hugepages). Snapshots of
 	// such a VM restore only with the userfaultfd backend.
 	HugePages string
-
-	// CPUConfig is a Firecracker custom CPU template (PUT /cpu-config),
-	// applied at boot and kept in snapshots; nil: the host's CPUID.
-	CPUConfig json.RawMessage
 }
-
-// NoAMXCPUConfig hides Intel AMX and the extended feature disable (XFD)
-// it relies on: CPUID.(7,0):EDX bits 22, 24 and 25 (AMX-BF16, AMX-TILE,
-// AMX-INT8), CPUID.(0xD,0):EAX bits 17 and 18 (the tile state components)
-// and CPUID.(0xD,1):EAX bit 4 (XFD). On nested-virtualization hosts with
-// AMX (Sapphire and Granite Rapids), restored vCPUs whose guests had armed
-// XFD failed VM entry (KVM_EXIT_FAIL_ENTRY, reason 7); without AMX the
-// guest never arms it, and snapshots carry no 8 KiB tile state per vCPU.
-// Bits a CPU does not have stay clear, so it is harmless elsewhere.
-var NoAMXCPUConfig = json.RawMessage(`{"cpuid_modifiers": [
-  {"leaf": "0x7", "subleaf": "0x0", "flags": 1, "modifiers": [{"register": "edx", "bitmap": "0bxxxxxx00x0xxxxxxxxxxxxxxxxxxxxxx"}]},
-  {"leaf": "0xd", "subleaf": "0x0", "flags": 1, "modifiers": [{"register": "eax", "bitmap": "0bxxxxxxxxxxxxx00xxxxxxxxxxxxxxxxx"}]},
-  {"leaf": "0xd", "subleaf": "0x1", "flags": 1, "modifiers": [{"register": "eax", "bitmap": "0bxxxxxxxxxxxxxxxxxxxxxxxxxxx0xxxx"}]}
-]}`)
 
 // HugePages2M is Firecracker's huge_pages value for 2 MiB hugetlbfs pages.
 const HugePages2M = "2M"
