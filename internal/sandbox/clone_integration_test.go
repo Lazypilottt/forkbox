@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -168,7 +169,9 @@ func cloneSuite(t *testing.T, backend string) {
 		if err != nil || !ok {
 			t.Fatalf("memory: %v", err)
 		}
-		n = min(n, max(4, avail/2/int(ms.Rss>>20+1)))
+		// And at most 4 per host CPU: every child faults its working set
+		// in through its own page server while its siblings run.
+		n = min(n, max(4, avail/2/int(ms.Rss>>20+1)), 4*runtime.NumCPU())
 		t.Logf("uffd: parent resident %d MiB, %d MiB available: forking %d children", ms.Rss>>20, avail, n)
 	}
 	res, err := m.Fork(ctx, parent.ID, n, 0)

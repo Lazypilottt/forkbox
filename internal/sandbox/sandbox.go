@@ -262,6 +262,11 @@ func (m *Manager) finishRestore(ctx context.Context, c *Created, v *vm.VM) error
 		}
 		if !m.VMs.Alive(rec.Pid, rec.ID) {
 			err = fmt.Errorf("%w; Firecracker (pid %d) has exited", err, rec.Pid)
+		} else {
+			err = fmt.Errorf("%w; Firecracker threads: %s", err, threadStates(v.Pid()))
+			if rec.PagerPid != 0 {
+				err = fmt.Errorf("%w; page server threads: %s", err, threadStates(rec.PagerPid))
+			}
 		}
 		if tail := vm.ConsoleTail(m.DataDir, rec.ID, 1500); tail != "" {
 			err = fmt.Errorf("%w\nconsole:\n%s", err, tail)

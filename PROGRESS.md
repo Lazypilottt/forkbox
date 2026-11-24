@@ -13,11 +13,11 @@
 | 8. Live fork | **Done.** `TestIntegrationForkTen` green on a KVM host (CI run 45370256276). |
 | 9. Checkpoints and rewind | **Done.** Green on a KVM host (CI run 45370256276). |
 | 10. Clone-correctness suite | **Done (merge backend).** All seven checks green (CI run 45370256276). Intermittent child deaths on Intel runners: see "KVM host". |
-| 11. MCP server | **Built.** Unit tests green; the MCP-against-daemon step and the fork-curve chart wait for a green integration step. |
+| 11. MCP server | **Done except the chart.** The MCP agent session against the daemon passed (CI run 45420195406); the fork-curve chart waits for a `bench=true` dispatch. |
 | v0.2 review | **In progress.** Chaos and stress tests added (`81a87bd`); `v0.2.0` not tagged yet. |
 | 12. Page server | **Built.** Core and uffd forks green (`TestIntegrationForkUffd`); the flat-curve benchmark waits for a dispatch run. |
-| 13. `race`, async SDK, warm pools | **Built.** Unit tests green; the SDK integration tests (race 20/13, warm-pool p95) wait for a green integration step. |
-| 14. Hardening | **In progress.** Limits, density, reaper sweep, egress, dmthin and hugepages work on KVM hosts; one green run of both jobs (on AMD runners) still to get. |
+| 13. `race`, async SDK, warm pools | **Done.** The SDK integration tests, race 20/13 and the warm pool included, passed (CI run 45420195406). |
+| 14. Hardening | **In progress.** The dmthin job is fully green (CI run 45420195406); the reflink job's only failure was the uffd clone suite (a child stalled; diagnostics added). |
 | 15–17 | Not started. |
 
 **Resume point:** a green CI run of both integration jobs (Task 14
@@ -54,7 +54,9 @@ same instant, only on Intel hosts with AMX. The console log now carries it
 (`9d27b1f`), and Forkbox retries a restore whose VM fails its first entry
 (`d56c290`). Ruled out: memory pressure (no OOM, 14 GB free), AMX/XFD state
 (a CPU template hiding them did not help: run 45411509957), TSC scaling (no
-TSC messages). AMD runners never show it. It looks like a fault of the
+TSC messages). AMD runners never show it. The host log shows
+`kvm_intel: Using Hyper-V Enlightened VMCS`: nested KVM on these Intel
+runners goes through Hyper-V's enlightened VMCS. It looks like a fault of the
 nested hypervisor; the tests now fail within a second of a VM exiting, and
 the CI kernel-log step greps for KVM and clocksource lines to catch the
 trigger. Acceptance needs an AMD runner or a bare-metal host until then.
@@ -968,9 +970,15 @@ named here. Numbers are from 2–4 vCPU nested-virtualization CI runners.
 - `Sandbox.race(n, run, check)` and `map`; `forkbox.aio` on `grpc.aio`;
   warm pools (`forkboxd --warm python=1:8`): paused, pre-restored sandboxes
   sized by the last 10 minutes of demand within a memory budget.
-- Unit tests green; the integration tests (race 20 with only attempt 13
-  passing, warm-pool create p95) run in the CI steps after the Go
-  integration tests.
+- CI run 45420195406 (AMD EPYC 7763, 4 vCPUs, nested; dmthin disks on
+  ext4): race with 20 attempts where only attempt 13 passes returned
+  attempt 13 and left no other child running; all 7 SDK and the MCP
+  integration tests passed.
+- `bench/restore.py` with `forkboxd --warm python=2:8`, 100 runs: 99 came
+  from the pool. Create to first exec p50 **122.3 ms**, p95 159.3 ms. The
+  pool removes disk, network and restore (0 ms at p50) but not the agent
+  wait (38 ms) and identity (40 ms) after resume, which dominate on this
+  host; see Ideas.
 
 ### Task 14. Hardening
 
@@ -1053,6 +1061,8 @@ Nothing.
 - Pin aarch64 artifacts.
 - Set up namespaces over netlink (one process, no fork/exec per step) to take the ~35 ms network step down; or keep a pool of ready namespaces.
 - Speed up the post-restore identity step (32 ms): one round trip, and the machine-id written in the background.
+- Warm pools: resume pool members ahead of time and keep the agent
+  connected, so a pool create skips the agent wait too.
 - Registry auth for private base images; debootstrap bases.
 - Detached Exec (survives disconnects; output to a log file) and stdin/TTY support.
 - Per-VM jail uids/gids from a reserved range.
