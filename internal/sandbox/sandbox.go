@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/Lazypilottt/forkbox/internal/agentwire"
@@ -64,6 +65,8 @@ type Manager struct {
 	forkLocks map[string]*sync.Mutex    // one fork at a time per parent
 	gcMu      sync.Mutex
 	reaped    reapCounters
+	// entryRetries counts restores retried after KVM_EXIT_FAIL_ENTRY.
+	entryRetries atomic.Uint64
 }
 
 // New returns a manager.

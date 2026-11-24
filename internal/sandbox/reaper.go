@@ -16,6 +16,8 @@ type ReapStats struct {
 	DeadVMs    uint64 // running sandboxes whose Firecracker process was gone
 	DeadPagers uint64 // uffd sandboxes whose page server was gone
 	Warm       uint64 // warm-pool members found dead
+	// EntryRetries counts restores retried after KVM_EXIT_FAIL_ENTRY.
+	EntryRetries uint64
 }
 
 type reapCounters struct {
@@ -25,7 +27,7 @@ type reapCounters struct {
 // ReapStats returns the reaper's counters.
 func (m *Manager) ReapStats() ReapStats {
 	c := &m.reaped
-	return ReapStats{Sweeps: c.sweeps.Load(), DeadVMs: c.deadVMs.Load(), DeadPagers: c.deadPagers.Load(), Warm: c.warm.Load()}
+	return ReapStats{Sweeps: c.sweeps.Load(), DeadVMs: c.deadVMs.Load(), DeadPagers: c.deadPagers.Load(), Warm: c.warm.Load(), EntryRetries: m.entryRetries.Load()}
 }
 
 // Sweep finds sandboxes whose VM or page server died while the daemon was

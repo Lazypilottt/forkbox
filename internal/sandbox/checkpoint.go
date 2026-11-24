@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/Lazypilottt/forkbox/internal/netns"
@@ -269,7 +270,31 @@ func (m *Manager) stopVM(_ context.Context, id string) error {
 
 // restoreVM restores rec's VM into its existing namespace: restore,
 // resume, agent, identity.
+//
+// On hosts that are themselves VMs (nested virtualization, as on hosted CI
+// runners), KVM sometimes refuses to enter a restored vCPU
+// (KVM_EXIT_FAIL_ENTRY) and Firecracker exits right after the resume.
+// Restoring the same snapshot again works, so that case is retried once.
 func (m *Manager) restoreVM(ctx context.Context, c *Created, snapDir string, mem memSource, disk string) error {
+	err := m.restoreVMOnce(ctx, c, snapDir, mem, disk)
+	if err == nil || ctx.Err() != nil || !strings.Contains(vm.ConsoleTail(m.DataDir, c.ID, 4096), "KVM_EXIT_FAIL_ENTRY") {
+		return err
+	}
+	m.Log.Printf("restore %s: KVM could not enter the restored vCPU (KVM_EXIT_FAIL_ENTRY); restoring again", c.ID)
+	m.entryRetries.Add(1)
+	_ = m.stopVM(ctx, c.ID)
+	if c.PagerPid != 0 {
+		killPager(c.PagerPid, c.ID)
+		c.PagerPid = 0
+	}
+	c.Timings = Timings{Disk: c.Timings.Disk, Network: c.Timings.Network}
+	if err2 := m.restoreVMOnce(ctx, c, snapDir, mem, disk); err2 != nil {
+		return fmt.Errorf("%w (and again: %w)", err, err2)
+	}
+	return nil
+}
+
+func (m *Manager) restoreVMOnce(ctx context.Context, c *Created, snapDir string, mem memSource, disk string) error {
 	rec := c.Sandbox
 	t := time.Now()
 	backend, pagerPid := m.backend(ctx, rec, mem)
