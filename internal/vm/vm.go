@@ -1,6 +1,7 @@
 package vm
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -80,6 +81,20 @@ func (v *VM) Pid() int {
 		return 0
 	}
 	return v.proc.Pid()
+}
+
+// Metrics flushes Firecracker's device metrics and returns the newest line
+// (JSON), for diagnostics. Only restored VMs have them.
+func (v *VM) Metrics(ctx context.Context) ([]byte, error) {
+	if err := v.api.do(ctx, v.m.o.APITimeout, "PUT", "/actions", action{ActionType: "FlushMetrics"}, nil); err != nil {
+		return nil, err
+	}
+	b, err := os.ReadFile(v.l.host(jailMetrics))
+	if err != nil {
+		return nil, err
+	}
+	lines := bytes.Split(bytes.TrimSpace(b), []byte("\n"))
+	return lines[len(lines)-1], nil
 }
 
 // Alive reports whether the VM's Firecracker process still runs.

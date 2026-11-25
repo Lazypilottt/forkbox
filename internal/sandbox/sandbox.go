@@ -296,6 +296,15 @@ func (m *Manager) restoreDiag(err error, rec *store.Sandbox, v *vm.VM) error {
 		if rec.PagerPid != 0 {
 			err = fmt.Errorf("%w; page server threads: %s", err, threadStates(rec.PagerPid))
 		}
+		// Is the guest kernel alive (network), and does traffic wake the
+		// agent? Device counters before and after.
+		ctx := context.Background()
+		err = fmt.Errorf("%w; devices: %s", err, deviceMetrics(ctx, v))
+		err = fmt.Errorf("%w; network probe: %s", err, guestNetProbe(ctx, rec.ID))
+		pctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+		_, perr := m.Agent(rec.ID).Ping(pctx)
+		cancel()
+		err = fmt.Errorf("%w; agent ping after the probe: %v; devices after: %s", err, perr, deviceMetrics(ctx, v))
 	}
 	if tail := vm.ConsoleTail(m.DataDir, rec.ID, 1500); tail != "" {
 		err = fmt.Errorf("%w\nconsole:\n%s", err, tail)

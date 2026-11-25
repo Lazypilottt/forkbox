@@ -19,8 +19,9 @@ const (
 	jailRestDir  = "/restore" // read-only inputs of a restore
 	jailRestVM   = jailRestDir + "/vmstate"
 	jailRestMem  = jailRestDir + "/mem"
-	jailUffd     = "/uffd.sock"  // the page server's socket (uffd backend)
-	execFileName = "firecracker" // the jailer names the jail after the exec file
+	jailUffd     = "/uffd.sock"    // the page server's socket (uffd backend)
+	jailMetrics  = "/metrics.json" // Firecracker's device metrics, for diagnostics
+	execFileName = "firecracker"   // the jailer names the jail after the exec file
 )
 
 // Files of a snapshot directory written by SnapshotFull and SnapshotDiff.

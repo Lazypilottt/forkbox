@@ -227,10 +227,11 @@ func TestSnapshotAndRestore(t *testing.T) {
 		t.Errorf("restored state = %s, want paused", r.State())
 	}
 	reqs := h.last().configRequests()
-	if len(reqs) != 1 || reqs[0].Path != "/snapshot/load" {
-		t.Fatalf("restore requests = %v, want only /snapshot/load", reqs)
+	if len(reqs) != 2 || reqs[0].Path != "/metrics" || reqs[1].Path != "/snapshot/load" {
+		t.Fatalf("restore requests = %v, want /metrics then /snapshot/load", reqs)
 	}
-	checkBody(t, reqs[0], map[string]any{
+	checkBody(t, reqs[0], map[string]any{"metrics_path": "/metrics.json"})
+	checkBody(t, reqs[1], map[string]any{
 		"snapshot_path":     "/restore/vmstate",
 		"mem_backend":       map[string]any{"backend_type": "File", "backend_path": "/restore/mem"},
 		"track_dirty_pages": true,
@@ -300,7 +301,7 @@ func TestRestoreRefusals(t *testing.T) {
 	if sock != UffdSocket(h.dataDir, r.ID()) {
 		t.Errorf("page server socket %q", sock)
 	}
-	checkBody(t, h.last().configRequests()[0], map[string]any{"mem_backend": map[string]any{"backend_type": "Uffd", "backend_path": "/uffd.sock"}})
+	checkBody(t, h.last().configRequests()[1], map[string]any{"mem_backend": map[string]any{"backend_type": "Uffd", "backend_path": "/uffd.sock"}})
 	must(t, r.Stop())
 	bad := rc
 	bad.VCPUs = 4

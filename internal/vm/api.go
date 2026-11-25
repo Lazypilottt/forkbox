@@ -74,6 +74,10 @@ type snapshotLoad struct {
 	ResumeVM        bool       `json:"resume_vm"`
 }
 
+type metricsConfig struct {
+	MetricsPath string `json:"metrics_path"`
+}
+
 type instanceInfo struct {
 	ID         string `json:"id"`
 	State      string `json:"state"` // Not started, Running or Paused

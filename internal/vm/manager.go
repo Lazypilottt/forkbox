@@ -248,6 +248,14 @@ func (m *Manager) Restore(ctx context.Context, snapshotDir string, mem MemBacken
 		if err := v.linkInto(filepath.Join(snapshotDir, SnapshotStateFile), jailRestVM); err != nil {
 			return err
 		}
+		// Device metrics, flushed on demand (VM.Metrics) to tell why a
+		// restored VM stopped answering.
+		if err := os.WriteFile(v.l.host(jailMetrics), nil, 0o600); err != nil {
+			return err
+		}
+		if err := m.o.chown(v.l.host(jailMetrics), m.o.UID, m.o.GID); err != nil {
+			return err
+		}
 		if mem.Kind == MemUffd {
 			return mem.Start(v.l.host(jailUffd))
 		}
@@ -260,6 +268,9 @@ func (m *Manager) Restore(ctx context.Context, snapshotDir string, mem MemBacken
 	}
 	v.record(StepRestoreJail, time.Since(start))
 
+	if err := v.api.do(ctx, m.o.APITimeout, "PUT", "/metrics", metricsConfig{MetricsPath: jailMetrics}, nil); err != nil {
+		return nil, v.abort(err)
+	}
 	t := time.Now()
 	load := snapshotLoad{
 		SnapshotPath:    jailRestVM,
